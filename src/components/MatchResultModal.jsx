@@ -55,13 +55,14 @@ export default function MatchResultModal({
       padding: '16px'
     }}>
       <div className="card-enterprise animate-pop-in" style={{
-        width: '460px',
-        padding: '32px 28px',
+        width: 'min(94vw, 440px)',
+        padding: 'clamp(20px, 5vw, 32px) clamp(16px, 4vw, 28px)',
         background: '#ffffff',
         boxShadow: 'var(--shadow-xl)',
-        borderRadius: '24px',
+        borderRadius: '20px',
         textAlign: 'center',
-        position: 'relative'
+        position: 'relative',
+        boxSizing: 'border-box'
       }}>
         {/* Top Right 'X' Close Button */}
         <button

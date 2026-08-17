@@ -218,10 +218,11 @@ export default function App() {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      padding: '24px 16px',
+      padding: 'clamp(12px, 3vw, 24px) clamp(8px, 2.5vw, 16px)',
       maxWidth: '1200px',
       margin: '0 auto',
-      width: '100%'
+      width: '100%',
+      boxSizing: 'border-box'
     }}>
       {/* Enterprise Header with Exit Room / Hub switch */}
       <EnterpriseHeader

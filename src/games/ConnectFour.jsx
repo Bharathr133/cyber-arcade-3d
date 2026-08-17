@@ -150,7 +150,6 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
     const curBoard = boardRef.current;
     if (winnerRef.current) return false;
 
-    // Anti-Cheat Validation
     if (isRemote) {
       const isValid = securityEngine.validateConnectFourMove(
         { colIdx, player: playerToDrop },
@@ -357,63 +356,64 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
   return (
     <div style={{
       width: '100%',
-      maxWidth: '680px',
+      maxWidth: '520px',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center'
+      alignItems: 'center',
+      padding: '0 4px'
     }}>
-      {/* Focused Match Controls: Only shows active mode badge and relevant actions */}
+      {/* Focused Match Controls: Mobile Adaptive Header */}
       <div style={{
         width: '100%',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '14px',
+        marginBottom: '12px',
         flexWrap: 'wrap',
-        gap: '10px'
+        gap: '8px'
       }}>
-        {/* Left Side: Single Active Mode Badge */}
+        {/* Active Mode Pill */}
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: '6px',
           background: '#ffffff',
           border: '1.5px solid #cbd5e1',
-          padding: '6px 14px',
+          padding: '6px 12px',
           borderRadius: '10px',
           fontFamily: 'var(--font-heading)',
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: '800',
           color: '#0f172a'
         }}>
           {gameMode === 'VS_COMPUTER' ? (
             <>
-              <Bot size={16} color="#0f172a" />
+              <Bot size={15} color="#0f172a" />
               <span>VS SMART AI</span>
             </>
           ) : gameMode === 'LOCAL_2P' ? (
             <>
-              <User size={16} color="#0f172a" />
-              <span>2-PLAYER LOCAL</span>
+              <User size={15} color="#0f172a" />
+              <span>2P LOCAL</span>
             </>
           ) : (
             <>
-              <Wifi size={16} color={isConnected ? '#16a34a' : '#d97706'} />
-              <span>ONLINE MATCH {isConnected ? '(CONNECTED)' : '(WAITING FOR FRIEND)'}</span>
+              <Wifi size={15} color={isConnected ? '#16a34a' : '#d97706'} />
+              <span>ONLINE {isConnected ? '(CONNECTED)' : '(WAITING)'}</span>
             </>
           )}
         </div>
 
-        {/* Right Side: QR Re-open & Reset */}
+        {/* Action Tools */}
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           {gameMode === 'ONLINE_QR' && (
             <button
               className="btn-secondary"
               onClick={() => setIsQrModalOpen(true)}
-              style={{ padding: '7px 12px', borderRadius: '8px', fontSize: '12px', color: '#1e3a8a' }}
+              style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', color: '#1e3a8a', minHeight: '36px' }}
             >
-              <QrCode size={14} />
-              <span>ROOM QR</span>
+              <QrCode size={13} />
+              <span>QR</span>
             </button>
           )}
 
@@ -421,16 +421,10 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
             className="btn-secondary"
             onClick={() => resetGame(true)}
             title="Reset Board"
-            style={{
-              padding: '7px 12px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
+            style={{ padding: '6px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', minHeight: '36px' }}
           >
-            <RotateCcw size={15} />
-            <span>RESET BOARD</span>
+            <RotateCcw size={13} />
+            <span>RESET</span>
           </button>
         </div>
       </div>
@@ -462,10 +456,13 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
       {/* Hover Drop Slot Preview */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${COLS}, 62px)`,
-        gap: '10px',
-        height: '24px',
-        marginBottom: '6px'
+        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
+        gap: 'clamp(4px, 1.5vw, 8px)',
+        width: '100%',
+        height: '20px',
+        marginBottom: '6px',
+        padding: '0 clamp(8px, 2vw, 14px)',
+        boxSizing: 'border-box'
       }}>
         {Array.from({ length: COLS }).map((_, c) => {
           const isHovered = hoveredCol === c && board[0][c] === EMPTY && !winner && isMyTurn && !isAiThinking;
@@ -473,9 +470,9 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
             <div key={`h-${c}`} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               {isHovered && (
                 <div style={{
-                  width: '20px', height: '20px', borderRadius: '50%',
+                  width: '14px', height: '14px', borderRadius: '50%',
                   background: currentPlayer === RED ? '#991b1b' : '#d97706',
-                  boxShadow: `0 0 10px ${currentPlayer === RED ? '#991b1b' : '#d97706'}`
+                  boxShadow: `0 0 8px ${currentPlayer === RED ? '#991b1b' : '#d97706'}`
                 }} />
               )}
             </div>
@@ -483,15 +480,17 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
         })}
       </div>
 
-      {/* Connect 4 Board */}
+      {/* 100% Fluid Mobile Connect 4 Board */}
       <div style={{
         background: '#1e3a8a',
-        padding: '16px',
-        borderRadius: '20px',
-        boxShadow: '0 16px 40px rgba(30, 58, 138, 0.25)',
-        display: 'inline-grid',
-        gridTemplateColumns: `repeat(${COLS}, 62px)`,
-        gap: '10px'
+        padding: 'clamp(8px, 2.5vw, 16px)',
+        borderRadius: '18px',
+        boxShadow: '0 12px 32px rgba(30, 58, 138, 0.22)',
+        display: 'grid',
+        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
+        gap: 'clamp(4px, 1.5vw, 8px)',
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
         {board.map((row, r) =>
           row.map((cell, c) => {
@@ -504,19 +503,20 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
                 onMouseEnter={() => setHoveredCol(c)}
                 onMouseLeave={() => setHoveredCol(null)}
                 style={{
-                  width: '62px',
-                  height: '62px',
+                  width: '100%',
+                  aspectRatio: '1 / 1',
                   borderRadius: '50%',
                   background: cell === RED ? '#991b1b' : cell === YELLOW ? '#d97706' : '#ffffff',
                   boxShadow: isWinningCell
-                    ? '0 0 24px #ffffff, inset 0 0 10px rgba(0,0,0,0.3)'
+                    ? '0 0 20px #ffffff, inset 0 0 8px rgba(0,0,0,0.3)'
                     : cell !== EMPTY
-                      ? 'inset 0 -3px 6px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)'
-                      : 'inset 0 3px 6px rgba(0,0,0,0.25)',
-                  border: isWinningCell ? '3.5px solid #ffffff' : 'none',
+                      ? 'inset 0 -2px 5px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)'
+                      : 'inset 0 2px 5px rgba(0,0,0,0.25)',
+                  border: isWinningCell ? '3px solid #ffffff' : 'none',
                   cursor: board[0][c] === EMPTY && !winner && isMyTurn && !isAiThinking ? 'pointer' : 'default',
                   transform: isWinningCell ? 'scale(1.08)' : 'scale(1)',
-                  transition: 'transform 0.15s ease'
+                  transition: 'transform 0.15s ease',
+                  touchAction: 'manipulation'
                 }}
               />
             );

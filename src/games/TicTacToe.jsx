@@ -117,7 +117,6 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
     const curBoard = boardRef.current;
     if (winnerRef.current) return;
 
-    // Anti-Cheat Validation
     if (isRemote) {
       const isValid = securityEngine.validateTicTacToeMove(
         { index, symbol },
@@ -314,59 +313,66 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
   const isMyTurn = gameMode === 'LOCAL_2P' || (gameMode === 'ONLINE_QR' ? currentSymbol === myRole : isXNext);
 
   return (
-    <div style={{ width: '100%', maxWidth: '520px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* Focused Match Controls: Only shows active mode badge and relevant actions */}
+    <div style={{
+      width: '100%',
+      maxWidth: '420px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      padding: '0 4px'
+    }}>
+      {/* Focused Match Controls: Mobile Adaptive Header */}
       <div style={{
         width: '100%',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '14px',
+        marginBottom: '12px',
         flexWrap: 'wrap',
-        gap: '10px'
+        gap: '8px'
       }}>
-        {/* Left Side: Single Active Mode Badge */}
+        {/* Active Mode Pill */}
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: '6px',
           background: '#ffffff',
           border: '1.5px solid #cbd5e1',
-          padding: '6px 14px',
+          padding: '6px 12px',
           borderRadius: '10px',
           fontFamily: 'var(--font-heading)',
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: '800',
           color: '#0f172a'
         }}>
           {gameMode === 'VS_COMPUTER' ? (
             <>
-              <Bot size={16} color="#0f172a" />
+              <Bot size={15} color="#0f172a" />
               <span>VS SMART AI</span>
             </>
           ) : gameMode === 'LOCAL_2P' ? (
             <>
-              <User size={16} color="#0f172a" />
-              <span>2-PLAYER LOCAL</span>
+              <User size={15} color="#0f172a" />
+              <span>2P LOCAL</span>
             </>
           ) : (
             <>
-              <Wifi size={16} color={isConnected ? '#16a34a' : '#d97706'} />
-              <span>ONLINE MATCH {isConnected ? '(CONNECTED)' : '(WAITING FOR FRIEND)'}</span>
+              <Wifi size={15} color={isConnected ? '#16a34a' : '#d97706'} />
+              <span>ONLINE {isConnected ? '(CONNECTED)' : '(WAITING)'}</span>
             </>
           )}
         </div>
 
-        {/* Right Side: QR Re-open & Reset */}
+        {/* Action Tools */}
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           {gameMode === 'ONLINE_QR' && (
             <button
               className="btn-secondary"
               onClick={() => setIsQrModalOpen(true)}
-              style={{ padding: '7px 12px', borderRadius: '8px', fontSize: '12px', color: '#1e3a8a' }}
+              style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', color: '#1e3a8a', minHeight: '36px' }}
             >
-              <QrCode size={14} />
-              <span>ROOM QR</span>
+              <QrCode size={13} />
+              <span>QR</span>
             </button>
           )}
 
@@ -374,16 +380,10 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
             className="btn-secondary"
             onClick={() => resetGame(true)}
             title="Reset Board"
-            style={{
-              padding: '7px 12px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
+            style={{ padding: '6px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', minHeight: '36px' }}
           >
-            <RotateCcw size={15} />
-            <span>RESET BOARD</span>
+            <RotateCcw size={13} />
+            <span>RESET</span>
           </button>
         </div>
       </div>
@@ -412,17 +412,20 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
         }
       />
 
-      {/* 3x3 Grid Board */}
+      {/* 100% Fluid Mobile 3x3 Grid Board */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 116px)',
-        gridTemplateRows: 'repeat(3, 116px)',
-        gap: '12px',
-        padding: '18px',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateRows: 'repeat(3, 1fr)',
+        gap: 'clamp(6px, 2vw, 12px)',
+        padding: 'clamp(10px, 3vw, 18px)',
         background: '#ffffff',
         border: '1.5px solid #cbd5e1',
         borderRadius: '20px',
-        boxShadow: 'var(--shadow-lg)'
+        boxShadow: 'var(--shadow-lg)',
+        width: '100%',
+        aspectRatio: '1 / 1',
+        boxSizing: 'border-box'
       }}>
         {board.map((cell, idx) => {
           const isWinning = winningLine.includes(idx);
@@ -433,8 +436,8 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
               disabled={!!cell || !!winner || !isMyTurn || isAiThinking}
               onClick={() => handleClick(idx)}
               style={{
-                width: '116px',
-                height: '116px',
+                width: '100%',
+                height: '100%',
                 background: isWinning ? '#f0fdf4' : '#f8fafc',
                 border: isWinning ? '2.5px solid #16a34a' : '1.5px solid #e2e8f0',
                 borderRadius: '14px',
@@ -443,12 +446,27 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
                 justifyContent: 'center',
                 cursor: !cell && !winner && isMyTurn && !isAiThinking ? 'pointer' : 'default',
                 boxShadow: isWinning ? '0 0 20px rgba(22, 163, 74, 0.25)' : 'none',
-                transform: isWinning ? 'scale(1.05)' : 'scale(1)',
-                transition: 'all 0.15s ease'
+                transform: isWinning ? 'scale(1.04)' : 'scale(1)',
+                transition: 'all 0.15s ease',
+                touchAction: 'manipulation'
               }}
             >
-              {cell === 'X' && <IconX size={58} color="#1e3a8a" strokeWidth={2.6} className="animate-pop-in" />}
-              {cell === 'O' && <IconO size={52} color="#881337" strokeWidth={2.6} className="animate-pop-in" />}
+              {cell === 'X' && (
+                <IconX
+                  size={typeof window !== 'undefined' && window.innerWidth < 480 ? 38 : 54}
+                  color="#1e3a8a"
+                  strokeWidth={2.6}
+                  className="animate-pop-in"
+                />
+              )}
+              {cell === 'O' && (
+                <IconO
+                  size={typeof window !== 'undefined' && window.innerWidth < 480 ? 34 : 48}
+                  color="#881337"
+                  strokeWidth={2.6}
+                  className="animate-pop-in"
+                />
+              )}
             </button>
           );
         })}

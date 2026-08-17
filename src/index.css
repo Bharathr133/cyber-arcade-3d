@@ -60,6 +60,7 @@ body, html, #root {
   font-family: var(--font-body);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 /* Elevated Enterprise Cards */
@@ -175,8 +176,8 @@ body, html, #root {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: var(--bg-app);
@@ -189,10 +190,20 @@ body, html, #root {
   background: var(--text-muted);
 }
 
-/* Mobile Responsiveness */
+/* Comprehensive Mobile Responsiveness */
 @media (max-width: 640px) {
+  body, html {
+    font-size: 14px;
+  }
+
   .btn-primary, .btn-secondary {
-    padding: 8px 12px;
+    padding: 9px 12px;
     font-size: 12px;
+    min-height: 40px;
+  }
+
+  .card-enterprise {
+    padding: 16px !important;
+    border-radius: 14px !important;
   }
 }

@@ -42,15 +42,17 @@ export default function ProfileModal({ isOpen, onClose, profile, onProfileUpdate
       padding: '16px'
     }}>
       <div className="card-enterprise animate-pop-in" style={{
-        width: '560px',
+        width: 'min(94vw, 540px)',
         maxHeight: '90vh',
-        padding: '32px',
+        padding: 'clamp(18px, 4vw, 32px)',
         background: '#ffffff',
         boxShadow: 'var(--shadow-xl)',
+        borderRadius: '20px',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        boxSizing: 'border-box'
       }}>
         {/* Close Button */}
         <button

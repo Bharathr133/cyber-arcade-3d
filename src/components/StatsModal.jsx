@@ -27,11 +27,13 @@ export default function StatsModal({ isOpen, onClose, stats, onResetStats }) {
       zIndex: 200
     }}>
       <div className="card-enterprise animate-pop-in" style={{
-        width: '560px',
-        padding: '32px',
+        width: 'min(94vw, 540px)',
+        padding: 'clamp(18px, 4vw, 32px)',
         background: '#ffffff',
         boxShadow: 'var(--shadow-xl)',
-        position: 'relative'
+        borderRadius: '20px',
+        position: 'relative',
+        boxSizing: 'border-box'
       }}>
         {/* Close Button */}
         <button

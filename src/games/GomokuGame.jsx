@@ -26,7 +26,6 @@ const DEFAULT_GOMOKU_STATE = {
 };
 
 export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMatchFinished, onGoHome }) {
-  // Check if joined via URL
   const isJoinedGuest = typeof window !== 'undefined' && window.location.search.includes('join=');
   const effectiveMode = isJoinedGuest ? 'ONLINE_QR' : initialMode;
 
@@ -69,7 +68,6 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
   currentPlayerRef.current = currentPlayer;
   const aiTimeoutRef = useRef(null);
 
-  // Persist game state synchronously to localStorage
   const persistCurrentState = (updatedBoard, nextPlayer, updatedScores, updatedHistory, curWinner, curWinningStones) => {
     saveGameState('gomoku', {
       board: updatedBoard,
@@ -83,7 +81,6 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
     });
   };
 
-  // Check 5 in a row in all directions
   const checkWin = (grid, lastR, lastC, player) => {
     const DIRS = [
       { dr: 0, dc: 1 },  // Horizontal
@@ -96,7 +93,6 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
       let count = 1;
       const stones = [[lastR, lastC]];
 
-      // Forward
       let r = lastR + dr;
       let c = lastC + dc;
       while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && grid[r][c] === player) {
@@ -106,7 +102,6 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
         c += dc;
       }
 
-      // Backward
       r = lastR - dr;
       c = lastC - dc;
       while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && grid[r][c] === player) {
@@ -127,7 +122,6 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
     return null;
   };
 
-  // Reset Game
   const resetGame = useCallback((sendSync = false) => {
     if (aiTimeoutRef.current) {
       clearTimeout(aiTimeoutRef.current);
@@ -151,12 +145,10 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
     }
   }, [gameMode, scores]);
 
-  // Place Stone with Anti-Cheat & Turn Switching
   const applyMove = useCallback((r, c, player, isRemote = false) => {
     const curBoard = boardRef.current;
     if (winnerRef.current) return false;
 
-    // Anti-Cheat Validation for remote move
     if (isRemote) {
       const isValid = securityEngine.validateGomokuMove(
         { r, c, player },
@@ -239,13 +231,12 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
     return true;
   }, [gameMode, scores, onMatchFinished]);
 
-  // Keep callback refs updated for WebRTC without re-initializing peer connection
   const applyMoveRef = useRef(applyMove);
   applyMoveRef.current = applyMove;
   const resetGameRef = useRef(resetGame);
   resetGameRef.current = resetGame;
 
-  // Stable WebRTC P2P Connection Setup (Runs ONCE on Mount)
+  // Stable WebRTC Setup
   useEffect(() => {
     if (gameMode === 'ONLINE_QR') {
       const params = new URLSearchParams(window.location.search);
@@ -279,7 +270,6 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
     }
   }, [gameMode]);
 
-  // Handle Board Click
   const handleCellClick = (r, c) => {
     if (isAiThinking || winner) return;
 
@@ -397,72 +387,73 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
   return (
     <div style={{
       width: '100%',
-      maxWidth: '680px',
+      maxWidth: '560px',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center'
+      alignItems: 'center',
+      padding: '0 4px'
     }}>
-      {/* Focused Match Controls: Only shows active mode badge and relevant actions */}
+      {/* Focused Match Controls: Mobile Adaptive Header */}
       <div style={{
         width: '100%',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '14px',
+        marginBottom: '12px',
         flexWrap: 'wrap',
-        gap: '10px'
+        gap: '8px'
       }}>
-        {/* Left Side: Single Active Mode Badge */}
+        {/* Active Mode Pill */}
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '8px',
+          gap: '6px',
           background: '#ffffff',
           border: '1.5px solid #cbd5e1',
-          padding: '6px 14px',
+          padding: '6px 12px',
           borderRadius: '10px',
           fontFamily: 'var(--font-heading)',
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: '800',
           color: '#0f172a'
         }}>
           {gameMode === 'VS_COMPUTER' ? (
             <>
-              <Bot size={16} color="#0f172a" />
+              <Bot size={15} color="#0f172a" />
               <span>VS SMART AI</span>
             </>
           ) : gameMode === 'LOCAL_2P' ? (
             <>
-              <User size={16} color="#0f172a" />
-              <span>2-PLAYER LOCAL</span>
+              <User size={15} color="#0f172a" />
+              <span>2P LOCAL</span>
             </>
           ) : (
             <>
-              <Wifi size={16} color={isConnected ? '#16a34a' : '#d97706'} />
-              <span>ONLINE MATCH {isConnected ? '(CONNECTED)' : '(WAITING FOR FRIEND)'}</span>
+              <Wifi size={15} color={isConnected ? '#16a34a' : '#d97706'} />
+              <span>ONLINE {isConnected ? '(CONNECTED)' : '(WAITING)'}</span>
             </>
           )}
         </div>
 
-        {/* Right Side: Tools & Reset */}
+        {/* Action Tools */}
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
             className="btn-secondary"
             onClick={() => setShowMoveNumbers(!showMoveNumbers)}
-            title="Toggle Move Numbers on Stones"
-            style={{ padding: '7px 10px', borderRadius: '8px' }}
+            title="Toggle Move Numbers"
+            style={{ padding: '6px 10px', borderRadius: '8px', minHeight: '36px' }}
           >
-            <Hash size={15} color={showMoveNumbers ? '#0f172a' : '#64748b'} />
+            <Hash size={14} color={showMoveNumbers ? '#0f172a' : '#64748b'} />
           </button>
 
           {gameMode === 'ONLINE_QR' && (
             <button
               className="btn-secondary"
               onClick={() => setIsQrModalOpen(true)}
-              style={{ padding: '7px 12px', borderRadius: '8px', fontSize: '12px', color: '#1e3a8a' }}
+              style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', color: '#1e3a8a', minHeight: '36px' }}
             >
-              <QrCode size={14} />
-              <span>ROOM QR</span>
+              <QrCode size={13} />
+              <span>QR</span>
             </button>
           )}
 
@@ -470,10 +461,10 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
             className="btn-secondary"
             onClick={() => resetGame(true)}
             title="Reset Board"
-            style={{ padding: '7px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            style={{ padding: '6px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', minHeight: '36px' }}
           >
-            <RotateCcw size={15} />
-            <span>RESET BOARD</span>
+            <RotateCcw size={13} />
+            <span>RESET</span>
           </button>
         </div>
       </div>
@@ -502,40 +493,43 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
         }
       />
 
-      {/* 15x15 Gomoku Board */}
+      {/* 100% Fluid Mobile-Responsive 15x15 Gomoku Sheet */}
       <div style={{
         background: '#e4d5b7',
-        padding: '16px',
-        borderRadius: '20px',
-        boxShadow: '0 16px 40px rgba(15, 23, 42, 0.16)',
-        border: '3px solid #b8a581',
+        padding: 'clamp(6px, 2vw, 16px)',
+        borderRadius: '16px',
+        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.14)',
+        border: '2.5px solid #b8a581',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        maxWidth: '100%',
-        overflowX: 'auto'
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
         {/* Top Coordinates (A-O) */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${BOARD_SIZE}, 28px)`,
+          gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
+          width: '100%',
           textAlign: 'center',
-          marginBottom: '4px',
+          marginBottom: '2px',
           fontFamily: 'var(--font-mono)',
-          fontSize: '10px',
+          fontSize: 'clamp(8px, 1.8vw, 10px)',
           fontWeight: '700',
           color: '#78694a'
         }}>
           {COORD_LETTERS.map(letter => (
-            <span key={letter}>{letter}</span>
+            <span key={letter} style={{ overflow: 'hidden' }}>{letter}</span>
           ))}
         </div>
 
-        {/* Board Grid */}
+        {/* Board 15x15 Grid with Fluid Aspect Ratio */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${BOARD_SIZE}, 28px)`,
-          gridTemplateRows: `repeat(${BOARD_SIZE}, 28px)`,
+          gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
+          gridTemplateRows: `repeat(${BOARD_SIZE}, 1fr)`,
+          width: '100%',
+          aspectRatio: '1 / 1',
           gap: '0px'
         }}>
           {board.map((row, r) =>
@@ -552,58 +546,59 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
                   onMouseEnter={() => setHoverCoord({ r, c })}
                   onMouseLeave={() => setHoverCoord(null)}
                   style={{
-                    width: '28px',
-                    height: '28px',
+                    width: '100%',
+                    height: '100%',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     position: 'relative',
-                    cursor: cell === EMPTY && !winner && isMyTurn && !isAiThinking ? 'pointer' : 'default'
+                    cursor: cell === EMPTY && !winner && isMyTurn && !isAiThinking ? 'pointer' : 'default',
+                    touchAction: 'manipulation'
                   }}
                 >
                   {/* Grid Lines */}
                   <div style={{
                     position: 'absolute',
                     top: '50%', left: c === 0 ? '50%' : 0, right: c === BOARD_SIZE - 1 ? '50%' : 0,
-                    height: '1.5px', background: '#78694a', zIndex: 0
+                    height: '1.2px', background: '#78694a', zIndex: 0
                   }} />
                   <div style={{
                     position: 'absolute',
                     left: '50%', top: r === 0 ? '50%' : 0, bottom: r === BOARD_SIZE - 1 ? '50%' : 0,
-                    width: '1.5px', background: '#78694a', zIndex: 0
+                    width: '1.2px', background: '#78694a', zIndex: 0
                   }} />
 
                   {/* Star Points (Hoshi) */}
                   {((r === 3 || r === 11 || r === 7) && (c === 3 || c === 11 || c === 7)) && (
                     <div style={{
-                      position: 'absolute', width: '5px', height: '5px',
+                      position: 'absolute', width: '4px', height: '4px',
                       borderRadius: '50%', background: '#78694a', zIndex: 1
                     }} />
                   )}
 
-                  {/* Placed Stone */}
+                  {/* Placed Stone - 100% Scaled to Grid Cell */}
                   {cell !== EMPTY && (
                     <div style={{
-                      width: '24px',
-                      height: '24px',
+                      width: '88%',
+                      height: '88%',
                       borderRadius: '50%',
                       background: cell === BLACK
                         ? 'radial-gradient(circle at 35% 35%, #475569, #0f172a)'
                         : 'radial-gradient(circle at 35% 35%, #ffffff, #e2e8f0)',
                       boxShadow: isWinning
-                        ? '0 0 16px #eab308, 0 3px 6px rgba(0,0,0,0.4)'
-                        : '0 2px 5px rgba(0,0,0,0.3)',
+                        ? '0 0 12px #eab308, 0 2px 4px rgba(0,0,0,0.4)'
+                        : '0 1.5px 3px rgba(0,0,0,0.3)',
                       border: isWinning
-                        ? '2.5px solid #eab308'
+                        ? '2px solid #eab308'
                         : (cell === WHITE ? '1px solid #cbd5e1' : 'none'),
                       zIndex: 2,
-                      transform: isWinning ? 'scale(1.18)' : 'scale(1)',
+                      transform: isWinning ? 'scale(1.15)' : 'scale(1)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: cell === BLACK ? '#ffffff' : '#0f172a',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '9px',
+                      fontSize: 'clamp(7px, 1.6vw, 10px)',
                       fontWeight: '800',
                       transition: 'transform 0.15s ease'
                     }}>
@@ -611,7 +606,7 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
                         moveIdx + 1
                       ) : isLast ? (
                         <div style={{
-                          width: '6px', height: '6px', borderRadius: '50%',
+                          width: '24%', height: '24%', borderRadius: '50%',
                           background: cell === BLACK ? '#ffffff' : '#0f172a'
                         }} />
                       ) : null}
@@ -621,8 +616,8 @@ export default function GomokuGame({ profile, initialMode = 'VS_COMPUTER', onMat
                   {/* Ghost Hover Preview */}
                   {isHovered && (
                     <div style={{
-                      width: '22px',
-                      height: '22px',
+                      width: '80%',
+                      height: '80%',
                       borderRadius: '50%',
                       background: currentPlayer === BLACK ? 'rgba(15, 23, 42, 0.4)' : 'rgba(255, 255, 255, 0.6)',
                       border: '1px dashed #78694a',

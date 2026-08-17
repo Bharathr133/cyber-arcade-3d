@@ -179,8 +179,8 @@ export default function ArcadeHomeScreen({
       {/* Game Cards Grid (Mobile Responsive) */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '20px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))',
+        gap: 'clamp(12px, 3vw, 20px)'
       }}>
         {GAMES.map((game) => {
           const IconComp = game.icon;

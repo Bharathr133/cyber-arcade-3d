@@ -52,13 +52,14 @@ export default function StandardQrModal({
       padding: '16px'
     }}>
       <div className="card-enterprise animate-pop-in" style={{
-        width: '440px',
-        padding: '30px 24px',
+        width: 'min(94vw, 420px)',
+        padding: 'clamp(20px, 5vw, 30px) clamp(16px, 4vw, 24px)',
         background: '#ffffff',
         boxShadow: 'var(--shadow-xl)',
-        borderRadius: '24px',
+        borderRadius: '20px',
         textAlign: 'center',
-        position: 'relative'
+        position: 'relative',
+        boxSizing: 'border-box'
       }}>
         {/* Close Button */}
         <button

@@ -31,10 +31,10 @@ export default function MatchPlayerBar({
   return (
     <div style={{
       width: '100%',
-      marginBottom: '16px',
+      marginBottom: '12px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '10px'
+      gap: '8px'
     }}>
       {/* Winner Notification Banner */}
       {isGameOver && winnerText && (
@@ -43,18 +43,18 @@ export default function MatchPlayerBar({
           border: winnerText.includes('WIN') ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
           color: winnerText.includes('WIN') ? '#15803d' : '#334155',
           borderRadius: '12px',
-          padding: '10px 16px',
+          padding: '8px 14px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '8px',
           fontFamily: 'var(--font-heading)',
-          fontSize: '14px',
+          fontSize: '13px',
           fontWeight: '900',
           letterSpacing: '0.02em',
           boxShadow: 'var(--shadow-sm)'
         }}>
-          {winnerText.includes('WIN') ? <Trophy size={18} color="#15803d" /> : <MinusCircle size={18} color="#64748b" />}
+          {winnerText.includes('WIN') ? <Trophy size={16} color="#15803d" /> : <MinusCircle size={16} color="#64748b" />}
           <span>{winnerText}</span>
         </div>
       )}
@@ -63,68 +63,71 @@ export default function MatchPlayerBar({
       <div style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
-        gap: '10px',
-        alignItems: 'stretch'
+        gap: 'clamp(4px, 1.5vw, 8px)',
+        alignItems: 'stretch',
+        width: '100%'
       }}>
         {/* Player 1 (You) */}
         <div className="card-enterprise" style={{
-          padding: '12px 14px',
+          padding: 'clamp(6px, 1.8vw, 12px)',
           background: '#ffffff',
           border: !isGameOver && isP1Turn ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
           boxShadow: !isGameOver && isP1Turn ? '0 4px 16px rgba(37, 99, 235, 0.15)' : 'var(--shadow-xs)',
-          borderRadius: '14px',
+          borderRadius: '12px',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          transition: 'all 0.15s ease'
+          gap: 'clamp(4px, 1.5vw, 8px)',
+          transition: 'all 0.15s ease',
+          minWidth: 0
         }}>
           {/* Avatar Icon */}
           <div style={{
-            width: '38px', height: '38px', borderRadius: '10px',
+            width: 'clamp(28px, 7vw, 36px)',
+            height: 'clamp(28px, 7vw, 36px)',
+            borderRadius: '8px',
             background: p1Avatar.color, color: '#ffffff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--font-heading)', fontSize: '14px', fontWeight: '900',
+            fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 14px)', fontWeight: '900',
             flexShrink: 0
           }}>
             {p1Name ? p1Name[0].toUpperCase() : 'P1'}
           </div>
 
-          <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ minWidth: 0, flex: 1, textAlign: 'left', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{
-                fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: '#0f172a',
+                fontFamily: 'var(--font-heading)',
+                fontSize: 'clamp(11px, 2.6vw, 13px)',
+                fontWeight: '800', color: '#0f172a',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
               }}>
                 {p1Name}
               </span>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '800',
-                padding: '1px 5px', borderRadius: '4px',
-                background: `${p1Tier.color}15`, color: p1Tier.color
-              }}>
-                {p1Tier.badge}
-              </span>
             </div>
 
             <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#64748b',
-              display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px'
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'clamp(9px, 2vw, 10px)',
+              color: '#64748b',
+              display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
             }}>
-              <span style={{ fontWeight: '700', color: p1Color }}>{p1Symbol}</span>
+              <span style={{ fontWeight: '800', color: p1Color }}>{p1Symbol}</span>
               <span>•</span>
-              <span>{p1Rating} ELO</span>
+              <span>{p1Rating}</span>
             </div>
           </div>
 
           {/* Turn / Score Badge */}
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: '900', color: '#0f172a' }}>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(13px, 3.2vw, 16px)', fontWeight: '900', color: '#0f172a' }}>
               {p1Score}
             </div>
             {!isGameOver && isP1Turn && (
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '800',
-                color: '#2563eb', background: '#eff6ff', padding: '2px 6px', borderRadius: '4px'
+                fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: '800',
+                color: '#2563eb', background: '#eff6ff', padding: '1px 4px', borderRadius: '4px',
+                display: 'inline-block'
               }}>
                 TURN
               </span>
@@ -138,17 +141,17 @@ export default function MatchPlayerBar({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '0 6px'
+          padding: '0 2px'
         }}>
           <div style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
+            fontSize: '9px',
             fontWeight: '900',
             color: '#94a3b8',
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
-            padding: '4px 8px',
-            borderRadius: '8px'
+            padding: '2px 5px',
+            borderRadius: '6px'
           }}>
             VS
           </div>
@@ -156,72 +159,72 @@ export default function MatchPlayerBar({
 
         {/* Player 2 (AI / Friend) */}
         <div className="card-enterprise" style={{
-          padding: '12px 14px',
+          padding: 'clamp(6px, 1.8vw, 12px)',
           background: '#ffffff',
           border: !isGameOver && !isP1Turn ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
           boxShadow: !isGameOver && !isP1Turn ? '0 4px 16px rgba(37, 99, 235, 0.15)' : 'var(--shadow-xs)',
-          borderRadius: '14px',
+          borderRadius: '12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '10px',
-          transition: 'all 0.15s ease'
+          gap: 'clamp(4px, 1.5vw, 8px)',
+          transition: 'all 0.15s ease',
+          minWidth: 0
         }}>
           {/* Turn / Score Badge */}
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: '900', color: '#0f172a' }}>
+          <div style={{ textAlign: 'left', flexShrink: 0 }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(13px, 3.2vw, 16px)', fontWeight: '900', color: '#0f172a' }}>
               {p2Score}
             </div>
             {!isGameOver && !isP1Turn && (
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '800',
-                color: '#2563eb', background: '#eff6ff', padding: '2px 6px', borderRadius: '4px'
+                fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: '800',
+                color: '#2563eb', background: '#eff6ff', padding: '1px 4px', borderRadius: '4px',
+                display: 'inline-block'
               }}>
                 TURN
               </span>
             )}
           </div>
 
-          <div style={{ minWidth: 0, flex: 1, textAlign: 'right' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+          <div style={{ minWidth: 0, flex: 1, textAlign: 'right', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
               <span style={{
-                fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: '#0f172a',
+                fontFamily: 'var(--font-heading)',
+                fontSize: 'clamp(11px, 2.6vw, 13px)',
+                fontWeight: '800', color: '#0f172a',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
               }}>
                 {p2Name}
               </span>
-              {!isVsAi && (
-                <span style={{
-                  fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '800',
-                  padding: '1px 5px', borderRadius: '4px',
-                  background: `${p2Tier.color}15`, color: p2Tier.color
-                }}>
-                  {p2Tier.badge}
-                </span>
-              )}
             </div>
 
             <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#64748b',
-              display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', marginTop: '2px'
+              fontFamily: 'var(--font-mono)',
+              fontSize: 'clamp(9px, 2vw, 10px)',
+              color: '#64748b',
+              display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', marginTop: '1px',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
             }}>
-              <span>{isVsAi ? 'AI Engine' : `${p2Rating} ELO`}</span>
+              <span>{isVsAi ? 'AI' : `${p2Rating}`}</span>
               <span>•</span>
-              <span style={{ fontWeight: '700', color: p2Color }}>{p2Symbol}</span>
+              <span style={{ fontWeight: '800', color: p2Color }}>{p2Symbol}</span>
             </div>
           </div>
 
           {/* Avatar Icon */}
           <div style={{
-            width: '38px', height: '38px', borderRadius: '10px',
+            width: 'clamp(28px, 7vw, 36px)',
+            height: 'clamp(28px, 7vw, 36px)',
+            borderRadius: '8px',
             background: isVsAi ? '#f1f5f9' : p2Avatar.color,
             color: isVsAi ? '#475569' : '#ffffff',
             border: isVsAi ? '1px solid #cbd5e1' : 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--font-heading)', fontSize: '14px', fontWeight: '900',
+            fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 14px)', fontWeight: '900',
             flexShrink: 0
           }}>
-            {isVsAi ? <Bot size={20} color="#475569" /> : (p2Name ? p2Name[0].toUpperCase() : 'P2')}
+            {isVsAi ? <Bot size={16} color="#475569" /> : (p2Name ? p2Name[0].toUpperCase() : 'P2')}
           </div>
         </div>
       </div>
