@@ -24,25 +24,64 @@ const DEFAULT_STATS = {
   tictactoe: { p1Wins: 0, p2Wins: 0, draws: 0 }
 };
 
+// Route Metadata for Dynamic SEO Titles & Descriptions
+const ROUTE_META = {
+  home: {
+    title: 'Online Free Games — 2-Player Multiplayer Gomoku, Connect 4 & Tic-Tac-Toe',
+    desc: 'Play free competitive 2-player games online with instant QR matchmaking and global ratings.'
+  },
+  gomoku: {
+    title: 'Gomoku Online (15×15) — Online Free Games',
+    desc: 'Play Gomoku Five in a Row online against AI or real friends with blitz turn timers.'
+  },
+  connect4: {
+    title: 'Connect 4 Online (7×6) — Online Free Games',
+    desc: 'Play Connect Four multiplayer online with instant WebRTC matchmaking.'
+  },
+  tictactoe: {
+    title: 'Tic-Tac-Toe Online (3×3) — Online Free Games',
+    desc: 'Play real-time 3×3 Tic-Tac-Toe with friends via QR code or test your skills against Smart AI.'
+  },
+  leaderboard: {
+    title: 'Global Grandmasters Leaderboard — Online Free Games',
+    desc: 'Top 50 global player rankings and competitive ELO leaderboards for Gomoku, Connect 4, and Tic-Tac-Toe.'
+  },
+  stats: {
+    title: 'Career Records & Match Statistics — Online Free Games',
+    desc: 'View your lifetime wins, losses, ELO progress, and win rates across all game modes.'
+  },
+  rules: {
+    title: 'Game Settings & Blitz Timers — Online Free Games',
+    desc: 'Customize turn timers, bank times, and first-player rules for competitive matches.'
+  }
+};
+
 function MainApp() {
   const alert = useCustomAlert();
 
-  const getGameFromUrl = () => {
+  const getRouteFromUrl = () => {
     try {
       const params = new URLSearchParams(window.location.search);
       const gameParam = params.get('game');
+      const pageParam = params.get('page');
       const joinParam = params.get('join');
 
       if (gameParam && ['gomoku', 'connect4', 'tictactoe'].includes(gameParam)) {
-        return gameParam;
+        return { gameId: gameParam, page: null };
+      }
+      if (pageParam) {
+        if (['gomoku', 'connect4', 'tictactoe'].includes(pageParam)) {
+          return { gameId: pageParam, page: null };
+        }
+        return { gameId: 'home', page: pageParam };
       }
       if (joinParam) {
-        if (joinParam.includes('connect4')) return 'connect4';
-        if (joinParam.includes('tictactoe')) return 'tictactoe';
-        return 'gomoku';
+        if (joinParam.includes('connect4')) return { gameId: 'connect4', page: null };
+        if (joinParam.includes('tictactoe')) return { gameId: 'tictactoe', page: null };
+        return { gameId: 'gomoku', page: null };
       }
     } catch (e) {}
-    return 'home';
+    return { gameId: 'home', page: null };
   };
 
   const getModeFromUrl = () => {
@@ -58,12 +97,13 @@ function MainApp() {
     return 'VS_COMPUTER';
   };
 
-  const [activeGameId, setActiveGameId] = useState(getGameFromUrl);
+  const initialRoute = getRouteFromUrl();
+  const [activeGameId, setActiveGameId] = useState(initialRoute.gameId);
   const [activeGameMode, setActiveGameMode] = useState(getModeFromUrl);
-  const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isStatsOpen, setIsStatsOpen] = useState(initialRoute.page === 'stats');
+  const [isProfileOpen, setIsProfileOpen] = useState(initialRoute.page === 'profile');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(initialRoute.page === 'rules' || initialRoute.page === 'settings');
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(initialRoute.page === 'leaderboard');
   const [isMuted, setIsMuted] = useState(false);
 
   // User Profile State
@@ -82,10 +122,29 @@ function MainApp() {
     }
   });
 
-  // Navigate to dedicated game page with chosen mode
+  // Synchronize document title and metadata with active route
+  useEffect(() => {
+    let key = 'home';
+    if (activeGameId && activeGameId !== 'home') key = activeGameId;
+    else if (isLeaderboardOpen) key = 'leaderboard';
+    else if (isStatsOpen) key = 'stats';
+    else if (isSettingsOpen) key = 'rules';
+
+    const meta = ROUTE_META[key] || ROUTE_META.home;
+    document.title = meta.title;
+
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute('content', meta.desc);
+  }, [activeGameId, isLeaderboardOpen, isStatsOpen, isSettingsOpen]);
+
+  // Navigate to dedicated game page with chosen mode & clean URL update
   const handleNavigate = (gameId, mode = 'VS_COMPUTER') => {
     setActiveGameId(gameId);
     setActiveGameMode(mode);
+    setIsLeaderboardOpen(false);
+    setIsStatsOpen(false);
+    setIsSettingsOpen(false);
+    setIsProfileOpen(false);
 
     if (gameId === 'home') {
       window.history.pushState({}, '', window.location.pathname);
@@ -95,10 +154,43 @@ function MainApp() {
     }
   };
 
+  // Open dedicated modal route and update URL bar
+  const handleOpenPage = (pageName) => {
+    setIsLeaderboardOpen(pageName === 'leaderboard');
+    setIsStatsOpen(pageName === 'stats');
+    setIsSettingsOpen(pageName === 'rules' || pageName === 'settings');
+    setIsProfileOpen(pageName === 'profile');
+
+    if (pageName) {
+      window.history.pushState({}, '', `?page=${pageName}`);
+    }
+  };
+
+  // Close modals and restore URL
+  const handleCloseModals = () => {
+    setIsLeaderboardOpen(false);
+    setIsStatsOpen(false);
+    setIsSettingsOpen(false);
+    setIsProfileOpen(false);
+
+    if (activeGameId && activeGameId !== 'home') {
+      const modeSlug = activeGameMode === 'LOCAL_2P' ? 'local' : activeGameMode === 'ONLINE_QR' ? 'online' : 'ai';
+      window.history.pushState({}, '', `?game=${activeGameId}&mode=${modeSlug}`);
+    } else {
+      window.history.pushState({}, '', window.location.pathname);
+    }
+  };
+
+  // Listen to browser Back/Forward navigation buttons
   useEffect(() => {
     const handlePopState = () => {
-      setActiveGameId(getGameFromUrl());
+      const route = getRouteFromUrl();
+      setActiveGameId(route.gameId);
       setActiveGameMode(getModeFromUrl());
+      setIsStatsOpen(route.page === 'stats');
+      setIsProfileOpen(route.page === 'profile');
+      setIsSettingsOpen(route.page === 'rules' || route.page === 'settings');
+      setIsLeaderboardOpen(route.page === 'leaderboard');
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -196,7 +288,7 @@ function MainApp() {
 
     logoutUserProfile();
     setProfile(null);
-    setIsProfileOpen(false);
+    handleCloseModals();
   };
 
   if (!profile) {
@@ -255,10 +347,10 @@ function MainApp() {
               profile={profile}
               stats={stats}
               onSelectGame={handleNavigate}
-              onOpenProfile={() => setIsProfileOpen(true)}
-              onOpenStats={() => setIsStatsOpen(true)}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+              onOpenProfile={() => handleOpenPage('profile')}
+              onOpenStats={() => handleOpenPage('stats')}
+              onOpenSettings={() => handleOpenPage('rules')}
+              onOpenLeaderboard={() => handleOpenPage('leaderboard')}
             />
           </div>
         );
@@ -288,10 +380,10 @@ function MainApp() {
       <EnterpriseHeader
         activeGameId={activeGameId}
         onSelectGame={handleNavigate}
-        onOpenStats={() => setIsStatsOpen(true)}
-        onOpenProfile={() => setIsProfileOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
+        onOpenStats={() => handleOpenPage('stats')}
+        onOpenProfile={() => handleOpenPage('profile')}
+        onOpenSettings={() => handleOpenPage('rules')}
+        onOpenLeaderboard={() => handleOpenPage('leaderboard')}
         profile={profile}
         isMuted={isMuted}
         onToggleSound={toggleSound}
@@ -320,39 +412,39 @@ function MainApp() {
           paddingTop: '2px',
           textAlign: 'center'
         }}>
-          Championship Arena • Developed by <a href="https://bharathr.vercel.app/" target="_blank" rel="noreferrer" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '700' }}>Bharath R</a>
+          Online Free Games • Developed by <a href="https://bharathr.vercel.app/" target="_blank" rel="noreferrer" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '700' }}>Bharath R</a>
         </div>
       )}
 
-      {/* Stats Modal */}
+      {/* Stats Modal / Route */}
       <StatsModal
         isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
+        onClose={handleCloseModals}
         profile={profile}
         stats={stats}
         onResetStats={handleResetStats}
       />
 
-      {/* Profile Modal */}
+      {/* Profile Modal / Route */}
       <ProfileModal
         isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
+        onClose={handleCloseModals}
         profile={profile}
         onProfileUpdated={(updated) => setProfile({ ...updated })}
         onLogout={handleLogout}
       />
 
-      {/* Match Settings Modal */}
+      {/* Match Settings Modal / Route */}
       <MatchSettingsModal
         isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        onClose={handleCloseModals}
         onSettingsSaved={(newSettings) => setSettings(newSettings)}
       />
 
-      {/* Global Leaderboard Modal (Top 50 Grandmasters) */}
+      {/* Global Leaderboard Modal / Route (Top 50 Grandmasters) */}
       <GlobalLeaderboardModal
         isOpen={isLeaderboardOpen}
-        onClose={() => setIsLeaderboardOpen(false)}
+        onClose={handleCloseModals}
         currentUserProfile={profile}
       />
     </div>

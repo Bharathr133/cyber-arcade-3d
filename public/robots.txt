@@ -1,0 +1,9 @@
+# Online Free Games - Search Engine Robots Configuration
+User-agent: *
+Allow: /
+Allow: /?game=gomoku
+Allow: /?game=connect4
+Allow: /?game=tictactoe
+
+# Sitemaps
+Sitemap: https://onlinefreegames.vercel.app/sitemap.xml
