@@ -8,6 +8,7 @@ import { saveGameState, loadGameState } from '../utils/gameStateStorage.js';
 import StandardQrModal from '../components/StandardQrModal.jsx';
 import MatchPlayerBar from '../components/MatchPlayerBar.jsx';
 import MatchResultModal from '../components/MatchResultModal.jsx';
+import MatchLobbyReadyModal from '../components/MatchLobbyReadyModal.jsx';
 
 const COLS = 7;
 const ROWS = 6;
@@ -25,7 +26,8 @@ const DEFAULT_C4_STATE = {
   history: []
 };
 
-export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMatchFinished, onGoHome }) {
+export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', settings, onMatchFinished, onGoHome }) {
+  const turnTimeLimit = settings?.turnTimeLimit !== undefined ? settings.turnTimeLimit : 30;
   const isJoinedGuest = typeof window !== 'undefined' && window.location.search.includes('join=');
   const effectiveMode = isJoinedGuest ? 'ONLINE_QR' : initialMode;
 
@@ -50,8 +52,13 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
     xpGained: 0
   });
 
-  // QR Modal State
+  // Turn Clock & Forfeit State (30s per turn)
+  const [timeLeft, setTimeLeft] = useState(30);
+
+  // QR & Lobby Modal State
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isLobbyReady, setIsLobbyReady] = useState(false);
+  const [opponentProfile, setOpponentProfile] = useState({ name: 'Opponent', avatarId: '2', rating: 1200 });
   const [shareUrl, setShareUrl] = useState('');
   const [isConnected, setIsConnected] = useState(false);
 
@@ -66,6 +73,7 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
   const currentPlayerRef = useRef(currentPlayer);
   currentPlayerRef.current = currentPlayer;
   const aiTimeoutRef = useRef(null);
+  const resultModalTimeoutRef = useRef(null);
 
   const persistCurrentState = (updatedBoard, nextPlayer, updatedScores, curWinner, curWinningCells, updatedHistory) => {
     saveGameState('connect4', {
@@ -85,6 +93,10 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
       clearTimeout(aiTimeoutRef.current);
       aiTimeoutRef.current = null;
     }
+    if (resultModalTimeoutRef.current) {
+      clearTimeout(resultModalTimeoutRef.current);
+      resultModalTimeoutRef.current = null;
+    }
     setIsAiThinking(false);
     const emptyBoard = Array(ROWS).fill(null).map(() => Array(COLS).fill(EMPTY));
     setBoard(emptyBoard);
@@ -93,6 +105,7 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
     setWinningCells([]);
     setHistory([]);
     setHoveredCol(null);
+    setTimeLeft(turnTimeLimit > 0 ? turnTimeLimit : 30);
     setResultModal({ isOpen: false, outcome: null, ratingDelta: 0, xpGained: 0 });
 
     persistCurrentState(emptyBoard, RED, scores, null, [], []);
@@ -100,7 +113,7 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
     if (sendSync && gameMode === 'ONLINE_QR') {
       standardMultiplayer.sendReset();
     }
-  }, [gameMode, scores]);
+  }, [gameMode, scores, turnTimeLimit]);
 
   const checkWin = (grid) => {
     // 1. Horizontal
@@ -219,7 +232,8 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
         onMatchFinished('connect4', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2');
       }
 
-      setTimeout(() => {
+      if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
+      resultModalTimeoutRef.current = setTimeout(() => {
         setResultModal({
           isOpen: true,
           outcome,
@@ -240,10 +254,99 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
     return true;
   }, [gameMode, scores, onMatchFinished]);
 
+  const handleTimeoutForfeit = useCallback((timedOutPlayer) => {
+    if (winnerRef.current) return;
+    const winningPlayer = timedOutPlayer === RED ? YELLOW : RED;
+    setWinner(winningPlayer);
+    soundSynth.playVictory();
+
+    const outcome = (gameMode === 'ONLINE_QR' && myRoleRef.current !== winningPlayer) ? 'LOSS' : (gameMode === 'VS_COMPUTER' && timedOutPlayer === RED ? 'LOSS' : 'WIN');
+    const delta = outcome === 'WIN' ? 25 : -10;
+    const xp = outcome === 'WIN' ? 50 : 10;
+
+    const updatedScores = { ...scores };
+    if (winningPlayer === RED) updatedScores.red = (updatedScores.red || 0) + 1;
+    else updatedScores.yellow = (updatedScores.yellow || 0) + 1;
+    setScores(updatedScores);
+
+    if (outcome === 'WIN') {
+      try { confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } }); } catch (e) {}
+    }
+
+    if (onMatchFinished) {
+      onMatchFinished('connect4', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent');
+    }
+
+    if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
+    resultModalTimeoutRef.current = setTimeout(() => {
+      setResultModal({
+        isOpen: true,
+        outcome,
+        ratingDelta: delta,
+        xpGained: xp
+      });
+    }, 400);
+  }, [gameMode, scores, onMatchFinished]);
+
+  const handleTimeoutForfeitRef = useRef(handleTimeoutForfeit);
+  handleTimeoutForfeitRef.current = handleTimeoutForfeit;
+
+  // Active Blitz Turn Timer (Customizable)
+  useEffect(() => {
+    if (winner || turnTimeLimit === 0) return;
+    setTimeLeft(turnTimeLimit);
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        const next = prev - 1;
+        if (next <= 5 && next > 0) {
+          soundSynth.playClick();
+        }
+        return next >= 0 ? next : 0;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentPlayer, winner, turnTimeLimit]);
+
+  // Safe Timeout Trigger (Runs cleanly outside reducer only when match has started)
+  useEffect(() => {
+    if (timeLeft === 0 && !winner && turnTimeLimit > 0 && history.length > 0) {
+      handleTimeoutForfeitRef.current(currentPlayer);
+    }
+  }, [timeLeft, winner, turnTimeLimit, currentPlayer, history.length]);
+
+  // Online Disconnect Forfeit (15s Reconnect Grace Period)
+  useEffect(() => {
+    let disconnectTimer = null;
+    if (gameMode === 'ONLINE_QR' && !isConnected && !winner && history.length > 0) {
+      disconnectTimer = setTimeout(() => {
+        if (!isConnected && !winnerRef.current) {
+          handleTimeoutForfeitRef.current(myRoleRef.current === RED ? YELLOW : RED);
+        }
+      }, 15000);
+    }
+    return () => {
+      if (disconnectTimer) clearTimeout(disconnectTimer);
+    };
+  }, [gameMode, isConnected, winner, history.length]);
+
   const applyDropTokenRef = useRef(applyDropToken);
   applyDropTokenRef.current = applyDropToken;
   const resetGameRef = useRef(resetGame);
   resetGameRef.current = resetGame;
+
+  const handleStartMatch = useCallback((broadcast = true) => {
+    setIsLobbyReady(false);
+    setIsQrModalOpen(false);
+    soundSynth.playVictory();
+    if (broadcast && gameMode === 'ONLINE_QR') {
+      standardMultiplayer.sendStartMatch({});
+    }
+  }, [gameMode]);
+
+  const handleStartMatchRef = useRef(handleStartMatch);
+  handleStartMatchRef.current = handleStartMatch;
 
   // Stable WebRTC Setup
   useEffect(() => {
@@ -256,9 +359,28 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
         onReset: () => resetGameRef.current(false),
         onConnect: () => {
           setIsConnected(true);
+          setIsQrModalOpen(false);
+          setIsLobbyReady(true);
           soundSynth.playVictory();
+          // Send profile info to peer
+          standardMultiplayer.sendPeerProfile({
+            name: profile?.name || 'Player',
+            avatarId: profile?.avatarId || '1',
+            rating: profile?.rating || 1200
+          });
         },
-        onDisconnect: () => setIsConnected(false)
+        onPeerProfile: (peerProfile) => {
+          if (peerProfile) {
+            setOpponentProfile(peerProfile);
+          }
+        },
+        onStartMatch: () => {
+          handleStartMatchRef.current(false);
+        },
+        onDisconnect: () => {
+          setIsConnected(false);
+          setIsLobbyReady(false);
+        }
       };
 
       if (joinParam) {
@@ -277,7 +399,7 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
         standardMultiplayer.cleanup();
       };
     }
-  }, [gameMode]);
+  }, [gameMode, profile?.name, profile?.avatarId, profile?.rating]);
 
   const handleColumnClick = (c) => {
     if (isAiThinking || winner) return;
@@ -293,7 +415,172 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
     }
   };
 
-  // Smart Connect 4 AI
+  // Heuristic evaluation of a 4-token window for Connect 4 AI
+  const evaluateWindow = (window, piece) => {
+    let score = 0;
+    const oppPiece = piece === RED ? YELLOW : RED;
+    let pieceCount = 0;
+    let emptyCount = 0;
+    let oppCount = 0;
+
+    for (let i = 0; i < 4; i++) {
+      if (window[i] === piece) pieceCount++;
+      else if (window[i] === EMPTY) emptyCount++;
+      else if (window[i] === oppPiece) oppCount++;
+    }
+
+    if (pieceCount === 4) {
+      score += 100000;
+    } else if (pieceCount === 3 && emptyCount === 1) {
+      score += 1200;
+    } else if (pieceCount === 2 && emptyCount === 2) {
+      score += 150;
+    }
+
+    if (oppCount === 3 && emptyCount === 1) {
+      score -= 2200; // Heavy defense against opponent 3-in-a-row threats
+    } else if (oppCount === 2 && emptyCount === 2) {
+      score -= 200;
+    }
+
+    return score;
+  };
+
+  // Full board positional scoring with center-column bias
+  const scorePosition = (grid, piece) => {
+    let score = 0;
+
+    // Center column control (Column 3 has highest strategic connectivity)
+    let centerCount = 0;
+    for (let r = 0; r < ROWS; r++) {
+      if (grid[r][3] === piece) centerCount++;
+    }
+    score += centerCount * 45;
+
+    // Inner columns (2 and 4)
+    let innerCount = 0;
+    for (let r = 0; r < ROWS; r++) {
+      if (grid[r][2] === piece) innerCount++;
+      if (grid[r][4] === piece) innerCount++;
+    }
+    score += innerCount * 20;
+
+    // Horizontal 4-windows
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c <= COLS - 4; c++) {
+        score += evaluateWindow([grid[r][c], grid[r][c + 1], grid[r][c + 2], grid[r][c + 3]], piece);
+      }
+    }
+
+    // Vertical 4-windows
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r <= ROWS - 4; r++) {
+        score += evaluateWindow([grid[r][c], grid[r + 1][c], grid[r + 2][c], grid[r + 3][c]], piece);
+      }
+    }
+
+    // Diagonal Down-Right
+    for (let r = 0; r <= ROWS - 4; r++) {
+      for (let c = 0; c <= COLS - 4; c++) {
+        score += evaluateWindow([grid[r][c], grid[r + 1][c + 1], grid[r + 2][c + 2], grid[r + 3][c + 3]], piece);
+      }
+    }
+
+    // Diagonal Up-Right
+    for (let r = 3; r < ROWS; r++) {
+      for (let c = 0; c <= COLS - 4; c++) {
+        score += evaluateWindow([grid[r][c], grid[r - 1][c + 1], grid[r - 2][c + 2], grid[r - 3][c + 3]], piece);
+      }
+    }
+
+    return score;
+  };
+
+  const getValidLocations = (grid) => {
+    const valid = [];
+    const searchOrder = [3, 2, 4, 1, 5, 0, 6]; // Center-out search maximizes Alpha-Beta cutoffs
+    for (let c of searchOrder) {
+      if (grid[0][c] === EMPTY) {
+        valid.push(c);
+      }
+    }
+    return valid;
+  };
+
+  const getNextOpenRow = (grid, col) => {
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (grid[r][col] === EMPTY) return r;
+    }
+    return -1;
+  };
+
+  // Grandmaster Minimax with Alpha-Beta Pruning
+  const minimax = (grid, depth, alpha, beta, isMaximizing) => {
+    const validLocations = getValidLocations(grid);
+    const winResult = checkWin(grid);
+
+    if (winResult) {
+      if (winResult.winner === YELLOW) {
+        return { col: null, score: 1000000 + depth * 1000 };
+      } else if (winResult.winner === RED) {
+        return { col: null, score: -1000000 - depth * 1000 };
+      } else {
+        return { col: null, score: 0 }; // Draw
+      }
+    }
+
+    if (depth === 0 || validLocations.length === 0) {
+      return { col: null, score: scorePosition(grid, YELLOW) };
+    }
+
+    if (isMaximizing) {
+      let maxScore = -Infinity;
+      let bestCol = validLocations[0];
+
+      for (let col of validLocations) {
+        const row = getNextOpenRow(grid, col);
+        if (row === -1) continue;
+
+        grid[row][col] = YELLOW;
+        const evalResult = minimax(grid, depth - 1, alpha, beta, false);
+        grid[row][col] = EMPTY;
+
+        if (evalResult.score > maxScore) {
+          maxScore = evalResult.score;
+          bestCol = col;
+        }
+
+        alpha = Math.max(alpha, maxScore);
+        if (alpha >= beta) break; // Alpha-Beta Cutoff
+      }
+
+      return { col: bestCol, score: maxScore };
+    } else {
+      let minScore = Infinity;
+      let bestCol = validLocations[0];
+
+      for (let col of validLocations) {
+        const row = getNextOpenRow(grid, col);
+        if (row === -1) continue;
+
+        grid[row][col] = RED;
+        const evalResult = minimax(grid, depth - 1, alpha, beta, true);
+        grid[row][col] = EMPTY;
+
+        if (evalResult.score < minScore) {
+          minScore = evalResult.score;
+          bestCol = col;
+        }
+
+        beta = Math.min(beta, minScore);
+        if (alpha >= beta) break; // Alpha-Beta Cutoff
+      }
+
+      return { col: bestCol, score: minScore };
+    }
+  };
+
+  // Master Connect 4 AI
   useEffect(() => {
     if (gameMode === 'VS_COMPUTER' && currentPlayer === YELLOW && !winner) {
       setIsAiThinking(true);
@@ -303,47 +590,48 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
         const curBoard = boardRef.current;
         if (winnerRef.current) return;
 
-        // 1. Check if AI can win on next move
-        for (let c = 0; c < COLS; c++) {
-          const testBoard = curBoard.map(r => [...r]);
-          for (let r = ROWS - 1; r >= 0; r--) {
-            if (testBoard[r][c] === EMPTY) {
-              testBoard[r][c] = YELLOW;
-              const res = checkWin(testBoard);
-              if (res && res.winner === YELLOW) {
-                applyDropToken(c, YELLOW, false);
-                return;
-              }
-              break;
+        // 1. Immediate Win Check (Depth 1 Instant Finisher)
+        for (let c of [3, 2, 4, 1, 5, 0, 6]) {
+          const r = getNextOpenRow(curBoard, c);
+          if (r !== -1) {
+            curBoard[r][c] = YELLOW;
+            const res = checkWin(curBoard);
+            curBoard[r][c] = EMPTY;
+            if (res && res.winner === YELLOW) {
+              applyDropToken(c, YELLOW, false);
+              return;
             }
           }
         }
 
-        // 2. Check if AI must block Player 1 from winning
-        for (let c = 0; c < COLS; c++) {
-          const testBoard = curBoard.map(r => [...r]);
-          for (let r = ROWS - 1; r >= 0; r--) {
-            if (testBoard[r][c] === EMPTY) {
-              testBoard[r][c] = RED;
-              const res = checkWin(testBoard);
-              if (res && res.winner === RED) {
-                applyDropToken(c, YELLOW, false);
-                return;
-              }
-              break;
+        // 2. Immediate Block Check (Depth 1 Instant Saver)
+        for (let c of [3, 2, 4, 1, 5, 0, 6]) {
+          const r = getNextOpenRow(curBoard, c);
+          if (r !== -1) {
+            curBoard[r][c] = RED;
+            const res = checkWin(curBoard);
+            curBoard[r][c] = EMPTY;
+            if (res && res.winner === RED) {
+              applyDropToken(c, YELLOW, false);
+              return;
             }
           }
         }
 
-        // 3. Strategic column priority: Center (3), then 2, 4, 1, 5, 0, 6
-        const preferredCols = [3, 2, 4, 1, 5, 0, 6];
-        for (let col of preferredCols) {
-          if (curBoard[0][col] === EMPTY) {
-            applyDropToken(col, YELLOW, false);
-            return;
+        // 3. Deep Minimax Lookahead (Depth 5 for Master Tactical Play)
+        const boardCopy = curBoard.map(row => [...row]);
+        const bestMove = minimax(boardCopy, 5, -Infinity, Infinity, true);
+
+        if (bestMove && bestMove.col !== null && curBoard[0][bestMove.col] === EMPTY) {
+          applyDropToken(bestMove.col, YELLOW, false);
+        } else {
+          // Fallback to center preference
+          const valid = getValidLocations(curBoard);
+          if (valid.length > 0) {
+            applyDropToken(valid[0], YELLOW, false);
           }
         }
-      }, 350);
+      }, 300);
 
       return () => {
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
@@ -356,11 +644,15 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
   return (
     <div style={{
       width: '100%',
-      maxWidth: '520px',
+      maxWidth: 'min(480px, calc(100dvh - 125px), 100vw)',
+      height: '100%',
       display: 'flex',
       flexDirection: 'column',
+      justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '0 4px'
+      padding: '0',
+      boxSizing: 'border-box',
+      overflow: 'hidden'
     }}>
       {/* Focused Match Controls: Mobile Adaptive Header */}
       <div style={{
@@ -368,9 +660,9 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '12px',
-        flexWrap: 'wrap',
-        gap: '8px'
+        marginBottom: '6px',
+        flexWrap: 'nowrap',
+        gap: '6px'
       }}>
         {/* Active Mode Pill */}
         <div style={{
@@ -451,6 +743,7 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
           winner === YELLOW ? (gameMode === 'VS_COMPUTER' ? 'AI WINS' : 'YELLOW WINS') :
           winner === 'DRAW' ? 'DRAW' : null
         }
+        timeLeft={timeLeft}
       />
 
       {/* Hover Drop Slot Preview */}
@@ -533,21 +826,41 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', onMa
         gameTitle="CONNECT 4"
       />
 
+      {/* Match Lobby Ready Modal (Synchronized START for both players) */}
+      <MatchLobbyReadyModal
+        isOpen={isLobbyReady}
+        gameTitle="CONNECT 4"
+        myProfile={profile}
+        opponentProfile={opponentProfile}
+        settings={settings}
+        onStartMatch={() => handleStartMatch(true)}
+      />
+
       {/* Post-Match Victory / Defeat / Draw Result Modal */}
       <MatchResultModal
         isOpen={resultModal.isOpen}
-        onClose={() => setResultModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => {
+          setResultModal(prev => ({ ...prev, isOpen: false }));
+          resetGame(true);
+        }}
         outcome={resultModal.outcome}
-        gameTitle="Connect 4 (7x6)"
-        opponentName={gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2'}
+        gameTitle="Connect 4 (7×6)"
+        opponentName={gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent'}
         ratingDelta={resultModal.ratingDelta}
         xpGained={resultModal.xpGained}
         currentRating={profile?.rating || 1200}
         level={profile?.level || 1}
         xp={profile?.xp || 0}
         movesCount={history.length}
-        onRematch={() => resetGame(true)}
-        onGoHome={onGoHome}
+        onRematch={() => {
+          setResultModal(prev => ({ ...prev, isOpen: false }));
+          resetGame(true);
+        }}
+        onGoHome={() => {
+          setResultModal(prev => ({ ...prev, isOpen: false }));
+          resetGame(true);
+          onGoHome();
+        }}
       />
     </div>
   );

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Trophy, ShieldAlert, MinusCircle, RotateCcw, LayoutGrid, Share2, Check, ArrowRight, Zap, Award, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Trophy, ShieldAlert, MinusCircle, RotateCcw, LayoutGrid, Share2, Check, X } from 'lucide-react';
 import { getTier } from '../utils/userProfile.js';
 
 export default function MatchResultModal({
@@ -18,6 +19,17 @@ export default function MatchResultModal({
   onGoHome
 }) {
   const [copied, setCopied] = useState(false);
+
+  // Lock background body scroll when full-screen modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen || !outcome) return null;
 
@@ -42,39 +54,54 @@ export default function MatchResultModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(15, 23, 42, 0.65)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 250,
-      padding: '16px'
-    }}>
-      <div className="card-enterprise animate-pop-in" style={{
-        width: 'min(94vw, 440px)',
-        padding: 'clamp(20px, 5vw, 32px) clamp(16px, 4vw, 28px)',
-        background: '#ffffff',
-        boxShadow: 'var(--shadow-xl)',
-        borderRadius: '20px',
-        textAlign: 'center',
-        position: 'relative',
-        boxSizing: 'border-box'
-      }}>
+  const modalContent = (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 999999,
+        padding: '16px',
+        boxSizing: 'border-box',
+        pointerEvents: 'auto'
+      }}
+    >
+      {/* Centered Modal Card */}
+      <div
+        className="card-enterprise animate-pop-in"
+        style={{
+          width: 'min(92vw, 420px)',
+          padding: 'clamp(24px, 5vw, 32px) clamp(18px, 4vw, 28px)',
+          background: '#ffffff',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          borderRadius: '24px',
+          textAlign: 'center',
+          position: 'relative',
+          boxSizing: 'border-box',
+          margin: 'auto'
+        }}
+      >
         {/* Top Right 'X' Close Button */}
         <button
           onClick={onClose}
-          title="Close and inspect board"
+          title="Dismiss and inspect board"
           style={{
             position: 'absolute',
-            top: '18px',
-            right: '18px',
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
+            top: '16px',
+            right: '16px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
             background: '#f1f5f9',
             border: '1px solid #e2e8f0',
             color: '#64748b',
@@ -82,7 +109,8 @@ export default function MatchResultModal({
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            zIndex: 10
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = '#e2e8f0';
@@ -93,35 +121,35 @@ export default function MatchResultModal({
             e.currentTarget.style.color = '#64748b';
           }}
         >
-          <X size={18} />
+          <X size={20} />
         </button>
 
         {/* Outcome Icon Header */}
         <div style={{
-          width: '64px',
-          height: '64px',
+          width: '68px',
+          height: '68px',
           borderRadius: '20px',
           background: isWin ? '#f0fdf4' : isLoss ? '#fef2f2' : '#f8fafc',
-          border: isWin ? '2px solid #86efac' : isLoss ? '2px solid #fca5a5' : '2px solid #cbd5e1',
+          border: isWin ? '2.5px solid #86efac' : isLoss ? '2.5px solid #fca5a5' : '2.5px solid #cbd5e1',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: '16px',
-          boxShadow: isWin ? '0 8px 24px rgba(22, 163, 74, 0.15)' : 'var(--shadow-xs)'
+          marginBottom: '14px',
+          boxShadow: isWin ? '0 10px 24px rgba(22, 163, 74, 0.2)' : 'var(--shadow-md)'
         }}>
           {isWin ? (
-            <Trophy size={32} color="#15803d" />
+            <Trophy size={34} color="#15803d" />
           ) : isLoss ? (
-            <ShieldAlert size={32} color="#991b1b" />
+            <ShieldAlert size={34} color="#991b1b" />
           ) : (
-            <MinusCircle size={32} color="#475569" />
+            <MinusCircle size={34} color="#475569" />
           )}
         </div>
 
         {/* Title */}
         <h2 style={{
           fontFamily: 'var(--font-heading)',
-          fontSize: '22px',
+          fontSize: 'clamp(22px, 5vw, 24px)',
           fontWeight: '900',
           color: isWin ? '#15803d' : isLoss ? '#991b1b' : '#0f172a',
           letterSpacing: '-0.02em',
@@ -134,7 +162,8 @@ export default function MatchResultModal({
           fontFamily: 'var(--font-body)',
           fontSize: '13px',
           color: '#64748b',
-          margin: '0 0 20px 0'
+          margin: '0 0 18px 0',
+          lineHeight: 1.4
         }}>
           {gameTitle} match against <strong>{opponentName}</strong> completed.
         </p>
@@ -144,11 +173,11 @@ export default function MatchResultModal({
           background: '#f8fafc',
           border: '1.5px solid #e2e8f0',
           borderRadius: '16px',
-          padding: '16px',
-          marginBottom: '20px',
+          padding: '14px 16px',
+          marginBottom: '18px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '12px'
+          gap: '10px'
         }}>
           {/* Rating Delta */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -223,7 +252,8 @@ export default function MatchResultModal({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px'
+              gap: '8px',
+              minHeight: '44px'
             }}
           >
             <RotateCcw size={16} />
@@ -243,7 +273,8 @@ export default function MatchResultModal({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '6px',
+                minHeight: '40px'
               }}
             >
               <LayoutGrid size={15} />
@@ -261,7 +292,8 @@ export default function MatchResultModal({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '6px',
+                minHeight: '40px'
               }}
             >
               {copied ? <Check size={15} color="#15803d" /> : <Share2 size={15} />}
@@ -272,4 +304,6 @@ export default function MatchResultModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

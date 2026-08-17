@@ -1,116 +1,216 @@
-import React from 'react';
-import { Trophy, X, RotateCcw, Award, Flame } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Trophy, X, RotateCcw, Award, Flame, Circle, CircleDot, Hash } from 'lucide-react';
+import { getTier } from '../utils/userProfile.js';
 
-export default function StatsModal({ isOpen, onClose, stats, onResetStats }) {
+export default function StatsModal({
+  isOpen,
+  onClose,
+  profile,
+  stats,
+  onResetStats
+}) {
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  const getWinRate = (wins, total) => {
-    if (!total || total === 0) return '0%';
-    return `${Math.round((wins / total) * 100)}%`;
+  const gameStats = profile?.gameStats || {
+    gomoku: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+    connect4: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+    tictactoe: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 }
   };
 
-  const GAME_STATS_CONFIG = [
-    { key: 'gomoku', title: 'Gomoku (Five in a Row)', color: '#0f172a' },
-    { key: 'connect4', title: 'Connect 4', color: '#2563eb' },
-    { key: 'tictactoe', title: 'Tic-Tac-Toe', color: '#f43f5e' }
+  const calculateTotal = (gameData) => {
+    const wins = gameData.wins || 0;
+    const losses = gameData.losses || 0;
+    const draws = gameData.draws || 0;
+    const total = wins + losses + draws;
+    const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+    return { wins, losses, draws, total, winRate, rating: gameData.rating || 1200, level: gameData.level || 1, xp: gameData.xp || 0 };
+  };
+
+  const gomoku = calculateTotal(gameStats.gomoku || {});
+  const connect4 = calculateTotal(gameStats.connect4 || {});
+  const tictactoe = calculateTotal(gameStats.tictactoe || {});
+
+  const allWins = (profile?.wins || 0);
+  const allLosses = (profile?.losses || 0);
+  const allDraws = (profile?.draws || 0);
+  const allTotal = allWins + allLosses + allDraws;
+  const allWinRate = allTotal > 0 ? Math.round((allWins / allTotal) * 100) : 0;
+
+  const STAT_CARDS = [
+    { title: 'Gomoku (15×15)', key: 'gomoku', icon: Circle, data: gomoku, color: '#0f172a', bg: '#f1f5f9' },
+    { title: 'Connect 4 (7×6)', key: 'connect4', icon: CircleDot, data: connect4, color: '#1e3a8a', bg: '#eff6ff' },
+    { title: 'Tic-Tac-Toe (3×3)', key: 'tictactoe', icon: Hash, data: tictactoe, color: '#881337', bg: '#fff1f2' }
   ];
 
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(15, 23, 42, 0.45)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 200
-    }}>
-      <div className="card-enterprise animate-pop-in" style={{
-        width: 'min(94vw, 540px)',
-        padding: 'clamp(18px, 4vw, 32px)',
-        background: '#ffffff',
-        boxShadow: 'var(--shadow-xl)',
-        borderRadius: '20px',
-        position: 'relative',
-        boxSizing: 'border-box'
-      }}>
+  const overallTier = getTier(profile?.rating || 1200);
+
+  const modalContent = (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        width: '100vw', height: '100vh',
+        background: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 999999,
+        padding: '16px',
+        boxSizing: 'border-box',
+        pointerEvents: 'auto'
+      }}
+    >
+      <div
+        className="card-enterprise animate-pop-in"
+        style={{
+          width: 'min(92vw, 480px)',
+          maxHeight: '90vh',
+          padding: 'clamp(20px, 5vw, 28px)',
+          background: '#ffffff',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          borderRadius: '24px',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+          boxSizing: 'border-box',
+          margin: 'auto'
+        }}
+      >
         {/* Close Button */}
         <button
           onClick={onClose}
           style={{
-            position: 'absolute', top: '20px', right: '20px',
-            background: 'none', border: 'none', color: '#64748b', cursor: 'pointer'
+            position: 'absolute', top: '16px', right: '16px',
+            width: '34px', height: '34px', borderRadius: '10px',
+            background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', zIndex: 10
           }}
         >
-          <X size={22} />
+          <X size={18} />
         </button>
 
         {/* Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
           <div style={{
-            width: '38px', height: '38px', borderRadius: '10px',
+            width: '40px', height: '40px', borderRadius: '12px',
             background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
-            <Trophy size={20} color="#d97706" />
+            <Trophy size={22} color="#d97706" />
           </div>
-          <div>
-            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '20px', fontWeight: '900', color: '#0f172a', margin: 0 }}>
-              MATCH STATISTICS & RECORDS
+          <div style={{ textAlign: 'left' }}>
+            <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: '900', color: '#0f172a', margin: 0 }}>
+              CAREER STATS & LEVELS
             </h2>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#64748b' }}>
-              Lifetime Performance Tracker
+              Per-Game Progression & Rating Tracker
             </span>
           </div>
         </div>
 
-        {/* Stats Table */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-          {GAME_STATS_CONFIG.map(({ key, title, color }) => {
-            const st = stats[key] || { p1Wins: 0, p2Wins: 0, draws: 0, totalMatches: 0 };
-            const total = (st.p1Wins || 0) + (st.p2Wins || 0) + (st.draws || 0);
+        {/* Global Summary Card */}
+        <div style={{
+          background: '#0f172a',
+          color: '#ffffff',
+          borderRadius: '16px',
+          padding: '16px 18px',
+          marginBottom: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontFamily: 'var(--font-heading)', fontSize: '24px', fontWeight: '900' }}>
+                {profile?.rating || 1200} ELO
+              </span>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: '9px', fontWeight: '900',
+                padding: '2px 6px', borderRadius: '4px', background: `${overallTier.color}30`, color: '#ffffff'
+              }}>
+                {overallTier.badge}
+              </span>
+            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '2px' }}>
+              Career Level {profile?.level || 1} • {allWinRate}% Win Rate
+            </span>
+          </div>
+
+          <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+            <div style={{ color: '#4ade80', fontWeight: '800' }}>{allWins} WINS</div>
+            <div style={{ color: '#f87171', fontWeight: '800' }}>{allLosses} LOSSES</div>
+            <div style={{ color: '#94a3b8' }}>{allDraws} DRAWS</div>
+          </div>
+        </div>
+
+        {/* Individual Game Breakdowns */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
+          {STAT_CARDS.map((card) => {
+            const IconComp = card.icon;
+            const gameTier = getTier(card.data.rating);
+            const xpReq = card.data.level * 100;
+            const xpPercent = Math.min(100, Math.round((card.data.xp / xpReq) * 100));
 
             return (
-              <div
-                key={key}
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '14px 16px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <h4 style={{ fontFamily: 'var(--font-heading)', fontSize: '14px', fontWeight: '800', color }}>
-                    {title}
-                  </h4>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#64748b', fontWeight: '700' }}>
-                    WIN RATE: {getWinRate(st.p1Wins, total)}
-                  </span>
+              <div key={card.title} style={{
+                background: '#f8fafc',
+                border: '1.5px solid #e2e8f0',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '28px', height: '28px', borderRadius: '8px',
+                      background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <IconComp size={16} color={card.color} />
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: card.color }}>
+                        {card.title}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#64748b', display: 'block' }}>
+                        Level <strong>{card.data.level}</strong> • <strong>{card.data.rating}</strong> ELO ({gameTier.badge})
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+                    <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '900', color: '#0f172a' }}>
+                      {card.data.winRate}% WR
+                    </span>
+                    <div style={{ color: '#64748b', fontSize: '10px' }}>
+                      <strong style={{ color: '#065f46' }}>{card.data.wins}W</strong> - <strong style={{ color: '#991b1b' }}>{card.data.losses}L</strong> - {card.data.draws}D
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: '8px',
-                  textAlign: 'center',
-                  fontFamily: 'var(--font-mono)'
-                }}>
-                  <div style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>P1 WINS</span>
-                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#2563eb' }}>{st.p1Wins || 0}</span>
+                {/* Level Progress Bar */}
+                <div style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: 'var(--font-mono)', color: '#64748b', marginBottom: '3px' }}>
+                    <span>XP: {card.data.xp} / {xpReq}</span>
+                    <span>{xpPercent}%</span>
                   </div>
-                  <div style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>P2 WINS</span>
-                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#f43f5e' }}>{st.p2Wins || 0}</span>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>DRAWS</span>
-                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#64748b' }}>{st.draws || 0}</span>
-                  </div>
-                  <div style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block' }}>TOTAL</span>
-                    <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>{total}</span>
+                  <div style={{ width: '100%', height: '5px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${xpPercent}%`, height: '100%', background: card.color, borderRadius: '3px' }} />
                   </div>
                 </div>
               </div>
@@ -118,26 +218,26 @@ export default function StatsModal({ isOpen, onClose, stats, onResetStats }) {
           })}
         </div>
 
-        {/* Footer Actions */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button
-            className="btn-secondary"
-            onClick={onResetStats}
-            style={{ padding: '8px 14px', fontSize: '12px' }}
-          >
-            <RotateCcw size={14} />
-            <span>RESET RECORDS</span>
-          </button>
-
-          <button
-            className="btn-primary"
-            onClick={onClose}
-            style={{ padding: '8px 20px', fontSize: '12px' }}
-          >
-            <span>CLOSE</span>
-          </button>
-        </div>
+        {/* Reset Stats Button */}
+        <button
+          onClick={onResetStats}
+          className="btn-secondary"
+          style={{
+            padding: '9px',
+            borderRadius: '10px',
+            fontSize: '11px',
+            fontWeight: '700',
+            color: '#991b1b',
+            borderColor: '#fecaca',
+            minHeight: '38px'
+          }}
+        >
+          <RotateCcw size={13} />
+          <span>RESET CAREER STATS</span>
+        </button>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

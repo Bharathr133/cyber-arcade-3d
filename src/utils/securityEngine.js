@@ -1,10 +1,11 @@
-// Enterprise Security & Anti-Cheat Validation Engine
+// Enterprise Security & Anti-Cheat Validation Engine with DevTools Tampering Protection
 
 class SecurityEngine {
   constructor() {
     // Sliding window packet rate limiter (Max 8 packets per second)
     this.packetTimestamps = [];
     this.MAX_PACKETS_PER_SECOND = 8;
+    this.HMAC_SECRET = 'championship_arena_v2_crypto_salt';
   }
 
   // 1. Strict String Sanitizer (Prevents XSS, Script Injection, Control Chars)
@@ -49,7 +50,30 @@ class SecurityEngine {
     return true; // Allow packet
   }
 
-  // 5. Anti-Cheat Move Validator for Gomoku
+  // 5. Cryptographic Checksum for DevTools / LocalStorage Anti-Tampering
+  generateSignature(data) {
+    try {
+      const core = `${data.id || ''}:${data.name || ''}:${data.rating || 0}:${data.level || 0}:${data.wins || 0}:${data.losses || 0}:${data.draws || 0}:${this.HMAC_SECRET}`;
+      let hash = 0;
+      for (let i = 0; i < core.length; i++) {
+        const char = core.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash |= 0; // Convert to 32bit integer
+      }
+      return Math.abs(hash).toString(36);
+    } catch (e) {
+      return '';
+    }
+  }
+
+  // Verify whether profile data was modified in DevTools Application tab
+  verifySignature(data, signature) {
+    if (!signature) return false;
+    const expected = this.generateSignature(data);
+    return expected === signature;
+  }
+
+  // 6. Anti-Cheat Move Validator for Gomoku
   validateGomokuMove(moveData, board, expectedPlayer, currentTurn) {
     if (!moveData || typeof moveData !== 'object') return false;
     const { r, c, player } = moveData;
@@ -67,7 +91,7 @@ class SecurityEngine {
     return true;
   }
 
-  // 6. Anti-Cheat Move Validator for Connect 4
+  // 7. Anti-Cheat Move Validator for Connect 4
   validateConnectFourMove(moveData, board, expectedPlayer, currentTurn) {
     if (!moveData || typeof moveData !== 'object') return false;
     const { colIdx, player } = moveData;
@@ -84,7 +108,7 @@ class SecurityEngine {
     return true;
   }
 
-  // 7. Anti-Cheat Move Validator for Tic-Tac-Toe
+  // 8. Anti-Cheat Move Validator for Tic-Tac-Toe
   validateTicTacToeMove(moveData, board, expectedSymbol, isXNext) {
     if (!moveData || typeof moveData !== 'object') return false;
     const { index, symbol } = moveData;
@@ -102,7 +126,7 @@ class SecurityEngine {
     return true;
   }
 
-  // 8. Safe JSON Parsing with Schema Guard
+  // 9. Safe JSON Parsing with Schema Guard
   safeJsonParse(rawString, fallbackDefault) {
     if (!rawString || typeof rawString !== 'string') return fallbackDefault;
     try {

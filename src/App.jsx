@@ -4,12 +4,17 @@ import EnterpriseFooter from './components/EnterpriseFooter.jsx';
 import ArcadeHomeScreen from './components/ArcadeHomeScreen.jsx';
 import StatsModal from './components/StatsModal.jsx';
 import ProfileModal from './components/ProfileModal.jsx';
+import MatchSettingsModal from './components/MatchSettingsModal.jsx';
+import GlobalLeaderboardModal from './components/GlobalLeaderboardModal.jsx';
 import WelcomeLoginScreen from './components/WelcomeLoginScreen.jsx';
+import { CustomAlertProvider, useCustomAlert } from './components/CustomAlertProvider.jsx';
 import GomokuGame from './games/GomokuGame.jsx';
 import ConnectFour from './games/ConnectFour.jsx';
 import TicTacToe from './games/TicTacToe.jsx';
 import { soundSynth } from './utils/soundSynth.js';
 import { getUserProfile, recordMatchResult, logoutUserProfile } from './utils/userProfile.js';
+import { getGameSettings } from './utils/gameSettings.js';
+import { cloudSync } from './utils/cloudSync.js';
 
 const STATS_STORAGE_KEY = 'championship_arena_stats';
 
@@ -19,7 +24,9 @@ const DEFAULT_STATS = {
   tictactoe: { p1Wins: 0, p2Wins: 0, draws: 0 }
 };
 
-export default function App() {
+function MainApp() {
+  const alert = useCustomAlert();
+
   const getGameFromUrl = () => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -55,10 +62,15 @@ export default function App() {
   const [activeGameMode, setActiveGameMode] = useState(getModeFromUrl);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
 
   // User Profile State
   const [profile, setProfile] = useState(() => getUserProfile());
+
+  // Game Settings State
+  const [settings, setSettings] = useState(() => getGameSettings());
 
   // Lifetime Match Stats
   const [stats, setStats] = useState(() => {
@@ -93,10 +105,19 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Initial cloud sync on load
+  useEffect(() => {
+    if (profile) {
+      try {
+        cloudSync.syncProfileToCloud(profile);
+      } catch (e) {}
+    }
+  }, [profile?.name, profile?.rating, profile?.level]);
+
   // Update Match Records and User Career Rating
   const handleMatchFinished = (gameKey, outcome, opponentName = 'Opponent') => {
     const { profile: updatedProfile } = recordMatchResult(
-      gameKey === 'gomoku' ? 'Gomoku' : gameKey === 'connect4' ? 'Connect 4' : 'Tic-Tac-Toe',
+      gameKey,
       outcome,
       opponentName
     );
@@ -124,7 +145,18 @@ export default function App() {
     });
   };
 
-  const handleResetStats = () => {
+  const handleResetStats = async () => {
+    const confirmed = await alert.show({
+      type: 'confirm',
+      isDestructive: true,
+      title: 'Reset Career Statistics?',
+      message: 'Are you sure you want to reset all lifetime wins, losses, and draw records? This action cannot be undone.',
+      confirmText: 'Reset Stats',
+      cancelText: 'Keep Stats'
+    });
+
+    if (!confirmed) return;
+
     const emptyStats = {
       gomoku: { p1Wins: 0, p2Wins: 0, draws: 0 },
       connect4: { p1Wins: 0, p2Wins: 0, draws: 0 },
@@ -136,6 +168,12 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
+
+    alert.show({
+      type: 'success',
+      title: 'Stats Cleared',
+      message: 'Your career records have been reset to zero.'
+    });
   };
 
   const toggleSound = () => {
@@ -144,13 +182,23 @@ export default function App() {
     soundSynth.setMuted(newMute);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const confirmed = await alert.show({
+      type: 'confirm',
+      isDestructive: true,
+      title: 'Switch / Logout Profile?',
+      message: 'Are you sure you want to log out of this profile? You will be prompted to create or sign into a player name.',
+      confirmText: 'Log Out',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) return;
+
     logoutUserProfile();
     setProfile(null);
     setIsProfileOpen(false);
   };
 
-  // If user hasn't registered a profile yet, show Welcome Login Screen
   if (!profile) {
     const isInvited = window.location.search.includes('join=');
     return (
@@ -169,6 +217,7 @@ export default function App() {
             <GomokuGame
               profile={profile}
               initialMode={activeGameMode}
+              settings={settings}
               onMatchFinished={handleMatchFinished}
               onGoHome={() => handleNavigate('home')}
             />
@@ -180,6 +229,7 @@ export default function App() {
             <ConnectFour
               profile={profile}
               initialMode={activeGameMode}
+              settings={settings}
               onMatchFinished={handleMatchFinished}
               onGoHome={() => handleNavigate('home')}
             />
@@ -191,6 +241,7 @@ export default function App() {
             <TicTacToe
               profile={profile}
               initialMode={activeGameMode}
+              settings={settings}
               onMatchFinished={handleMatchFinished}
               onGoHome={() => handleNavigate('home')}
             />
@@ -206,19 +257,28 @@ export default function App() {
               onSelectGame={handleNavigate}
               onOpenProfile={() => setIsProfileOpen(true)}
               onOpenStats={() => setIsStatsOpen(true)}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
             />
           </div>
         );
     }
   };
 
+  const isInsideGame = activeGameId && activeGameId !== 'home';
+
   return (
     <div style={{
-      minHeight: '100vh',
+      height: isInsideGame ? '100dvh' : 'auto',
+      minHeight: isInsideGame ? '100dvh' : '100vh',
+      maxHeight: isInsideGame ? '100dvh' : 'none',
+      overflowY: isInsideGame ? 'hidden' : 'auto',
+      overflowX: 'hidden',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      padding: 'clamp(12px, 3vw, 24px) clamp(8px, 2.5vw, 16px)',
+      justifyContent: isInsideGame ? 'space-between' : 'flex-start',
+      padding: isInsideGame ? 'clamp(6px, 1.2vw, 10px) clamp(6px, 2vw, 12px)' : 'clamp(12px, 3vw, 24px) clamp(8px, 2.5vw, 16px)',
       maxWidth: '1200px',
       margin: '0 auto',
       width: '100%',
@@ -230,10 +290,11 @@ export default function App() {
         onSelectGame={handleNavigate}
         onOpenStats={() => setIsStatsOpen(true)}
         onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenLeaderboard={() => setIsLeaderboardOpen(true)}
         profile={profile}
         isMuted={isMuted}
         onToggleSound={toggleSound}
-        isOnlineActive={activeGameMode === 'ONLINE_QR'}
       />
 
       {/* Dedicated Page Viewport */}
@@ -241,19 +302,33 @@ export default function App() {
         width: '100%',
         display: 'flex',
         justifyContent: 'center',
-        alignItems: 'flex-start',
-        flex: 1
+        alignItems: 'center',
+        flex: 1,
+        overflow: 'hidden'
       }}>
         {renderActiveView()}
       </main>
 
       {/* Standard Developer Footer */}
-      <EnterpriseFooter />
+      {!isInsideGame ? (
+        <EnterpriseFooter />
+      ) : (
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '9px',
+          color: '#94a3b8',
+          paddingTop: '2px',
+          textAlign: 'center'
+        }}>
+          Championship Arena • Developed by <a href="https://bharathr.vercel.app/" target="_blank" rel="noreferrer" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '700' }}>Bharath R</a>
+        </div>
+      )}
 
       {/* Stats Modal */}
       <StatsModal
         isOpen={isStatsOpen}
         onClose={() => setIsStatsOpen(false)}
+        profile={profile}
         stats={stats}
         onResetStats={handleResetStats}
       />
@@ -266,6 +341,28 @@ export default function App() {
         onProfileUpdated={(updated) => setProfile({ ...updated })}
         onLogout={handleLogout}
       />
+
+      {/* Match Settings Modal */}
+      <MatchSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSettingsSaved={(newSettings) => setSettings(newSettings)}
+      />
+
+      {/* Global Leaderboard Modal (Top 50 Grandmasters) */}
+      <GlobalLeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        currentUserProfile={profile}
+      />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <CustomAlertProvider>
+      <MainApp />
+    </CustomAlertProvider>
   );
 }

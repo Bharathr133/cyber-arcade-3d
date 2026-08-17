@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Bot, User, Circle, Disc, Hash, MinusCircle, CheckCircle2 } from 'lucide-react';
+import { Trophy, Bot, MinusCircle, Clock } from 'lucide-react';
 import { AVATARS, getTier } from '../utils/userProfile.js';
 
 export default function MatchPlayerBar({
@@ -18,23 +18,23 @@ export default function MatchPlayerBar({
   isP1Turn,
   isGameOver,
   winnerText,
-  gameMode
+  gameMode,
+  timeLeft = 30,
+  maxTime = 30
 }) {
   const p1Avatar = AVATARS.find(a => a.id === p1AvatarId) || AVATARS[0];
   const p2Avatar = AVATARS.find(a => a.id === p2AvatarId) || AVATARS[1];
 
-  const p1Tier = getTier(p1Rating || 1200);
-  const p2Tier = getTier(p2Rating || 1200);
-
   const isVsAi = gameMode === 'VS_COMPUTER';
+  const isUrgent = timeLeft <= 5 && !isGameOver;
 
   return (
     <div style={{
       width: '100%',
-      marginBottom: '12px',
+      marginBottom: '8px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '8px'
+      gap: '6px'
     }}>
       {/* Winner Notification Banner */}
       {isGameOver && winnerText && (
@@ -43,18 +43,18 @@ export default function MatchPlayerBar({
           border: winnerText.includes('WIN') ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
           color: winnerText.includes('WIN') ? '#15803d' : '#334155',
           borderRadius: '12px',
-          padding: '8px 14px',
+          padding: '6px 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '8px',
           fontFamily: 'var(--font-heading)',
-          fontSize: '13px',
+          fontSize: '12px',
           fontWeight: '900',
           letterSpacing: '0.02em',
           boxShadow: 'var(--shadow-sm)'
         }}>
-          {winnerText.includes('WIN') ? <Trophy size={16} color="#15803d" /> : <MinusCircle size={16} color="#64748b" />}
+          {winnerText.includes('WIN') ? <Trophy size={15} color="#15803d" /> : <MinusCircle size={15} color="#64748b" />}
           <span>{winnerText}</span>
         </div>
       )}
@@ -69,10 +69,10 @@ export default function MatchPlayerBar({
       }}>
         {/* Player 1 (You) */}
         <div className="card-enterprise" style={{
-          padding: 'clamp(6px, 1.8vw, 12px)',
+          padding: 'clamp(6px, 1.6vw, 10px)',
           background: '#ffffff',
-          border: !isGameOver && isP1Turn ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
-          boxShadow: !isGameOver && isP1Turn ? '0 4px 16px rgba(37, 99, 235, 0.15)' : 'var(--shadow-xs)',
+          border: !isGameOver && isP1Turn ? (isUrgent ? '2px solid #ef4444' : '2px solid #2563eb') : '1.5px solid #e2e8f0',
+          boxShadow: !isGameOver && isP1Turn ? (isUrgent ? '0 4px 16px rgba(239, 68, 68, 0.2)' : '0 4px 16px rgba(37, 99, 235, 0.15)') : 'var(--shadow-xs)',
           borderRadius: '12px',
           display: 'flex',
           alignItems: 'center',
@@ -82,12 +82,12 @@ export default function MatchPlayerBar({
         }}>
           {/* Avatar Icon */}
           <div style={{
-            width: 'clamp(28px, 7vw, 36px)',
-            height: 'clamp(28px, 7vw, 36px)',
+            width: 'clamp(26px, 6.5vw, 34px)',
+            height: 'clamp(26px, 6.5vw, 34px)',
             borderRadius: '8px',
             background: p1Avatar.color, color: '#ffffff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 14px)', fontWeight: '900',
+            fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 13px)', fontWeight: '900',
             flexShrink: 0
           }}>
             {p1Name ? p1Name[0].toUpperCase() : 'P1'}
@@ -97,7 +97,7 @@ export default function MatchPlayerBar({
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{
                 fontFamily: 'var(--font-heading)',
-                fontSize: 'clamp(11px, 2.6vw, 13px)',
+                fontSize: 'clamp(11px, 2.5vw, 13px)',
                 fontWeight: '800', color: '#0f172a',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
               }}>
@@ -107,7 +107,7 @@ export default function MatchPlayerBar({
 
             <div style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 'clamp(9px, 2vw, 10px)',
+              fontSize: 'clamp(9px, 1.8vw, 10px)',
               color: '#64748b',
               display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
@@ -120,22 +120,24 @@ export default function MatchPlayerBar({
 
           {/* Turn / Score Badge */}
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(13px, 3.2vw, 16px)', fontWeight: '900', color: '#0f172a' }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: '900', color: '#0f172a' }}>
               {p1Score}
             </div>
             {!isGameOver && isP1Turn && (
               <span style={{
                 fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: '800',
-                color: '#2563eb', background: '#eff6ff', padding: '1px 4px', borderRadius: '4px',
+                color: isUrgent ? '#ef4444' : '#2563eb',
+                background: isUrgent ? '#fef2f2' : '#eff6ff',
+                padding: '1px 4px', borderRadius: '4px',
                 display: 'inline-block'
               }}>
-                TURN
+                {timeLeft}s
               </span>
             )}
           </div>
         </div>
 
-        {/* Center VS Matchup Divider */}
+        {/* Center Countdown / VS Badge */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -143,26 +145,47 @@ export default function MatchPlayerBar({
           justifyContent: 'center',
           padding: '0 2px'
         }}>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '9px',
-            fontWeight: '900',
-            color: '#94a3b8',
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            padding: '2px 5px',
-            borderRadius: '6px'
-          }}>
-            VS
-          </div>
+          {!isGameOver ? (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              fontWeight: '900',
+              color: isUrgent ? '#ef4444' : '#0f172a',
+              background: isUrgent ? '#fee2e2' : '#f8fafc',
+              border: `1.5px solid ${isUrgent ? '#fca5a5' : '#e2e8f0'}`,
+              padding: '3px 7px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              boxShadow: isUrgent ? '0 0 8px rgba(239, 68, 68, 0.4)' : 'none',
+              animation: isUrgent ? 'pulseGlow 0.6s infinite alternate' : 'none'
+            }}>
+              <Clock size={11} color={isUrgent ? '#ef4444' : '#64748b'} />
+              <span>{timeLeft}s</span>
+            </div>
+          ) : (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '9px',
+              fontWeight: '900',
+              color: '#94a3b8',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              padding: '2px 5px',
+              borderRadius: '6px'
+            }}>
+              VS
+            </div>
+          )}
         </div>
 
         {/* Player 2 (AI / Friend) */}
         <div className="card-enterprise" style={{
-          padding: 'clamp(6px, 1.8vw, 12px)',
+          padding: 'clamp(6px, 1.6vw, 10px)',
           background: '#ffffff',
-          border: !isGameOver && !isP1Turn ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
-          boxShadow: !isGameOver && !isP1Turn ? '0 4px 16px rgba(37, 99, 235, 0.15)' : 'var(--shadow-xs)',
+          border: !isGameOver && !isP1Turn ? (isUrgent ? '2px solid #ef4444' : '2px solid #2563eb') : '1.5px solid #e2e8f0',
+          boxShadow: !isGameOver && !isP1Turn ? (isUrgent ? '0 4px 16px rgba(239, 68, 68, 0.2)' : '0 4px 16px rgba(37, 99, 235, 0.15)') : 'var(--shadow-xs)',
           borderRadius: '12px',
           display: 'flex',
           alignItems: 'center',
@@ -173,16 +196,18 @@ export default function MatchPlayerBar({
         }}>
           {/* Turn / Score Badge */}
           <div style={{ textAlign: 'left', flexShrink: 0 }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(13px, 3.2vw, 16px)', fontWeight: '900', color: '#0f172a' }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: '900', color: '#0f172a' }}>
               {p2Score}
             </div>
             {!isGameOver && !isP1Turn && (
               <span style={{
                 fontFamily: 'var(--font-mono)', fontSize: '8px', fontWeight: '800',
-                color: '#2563eb', background: '#eff6ff', padding: '1px 4px', borderRadius: '4px',
+                color: isUrgent ? '#ef4444' : '#2563eb',
+                background: isUrgent ? '#fef2f2' : '#eff6ff',
+                padding: '1px 4px', borderRadius: '4px',
                 display: 'inline-block'
               }}>
-                TURN
+                {timeLeft}s
               </span>
             )}
           </div>
@@ -191,7 +216,7 @@ export default function MatchPlayerBar({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
               <span style={{
                 fontFamily: 'var(--font-heading)',
-                fontSize: 'clamp(11px, 2.6vw, 13px)',
+                fontSize: 'clamp(11px, 2.5vw, 13px)',
                 fontWeight: '800', color: '#0f172a',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
               }}>
@@ -201,7 +226,7 @@ export default function MatchPlayerBar({
 
             <div style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: 'clamp(9px, 2vw, 10px)',
+              fontSize: 'clamp(9px, 1.8vw, 10px)',
               color: '#64748b',
               display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', marginTop: '1px',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
@@ -214,17 +239,17 @@ export default function MatchPlayerBar({
 
           {/* Avatar Icon */}
           <div style={{
-            width: 'clamp(28px, 7vw, 36px)',
-            height: 'clamp(28px, 7vw, 36px)',
+            width: 'clamp(26px, 6.5vw, 34px)',
+            height: 'clamp(26px, 6.5vw, 34px)',
             borderRadius: '8px',
             background: isVsAi ? '#f1f5f9' : p2Avatar.color,
             color: isVsAi ? '#475569' : '#ffffff',
             border: isVsAi ? '1px solid #cbd5e1' : 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 14px)', fontWeight: '900',
+            fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 13px)', fontWeight: '900',
             flexShrink: 0
           }}>
-            {isVsAi ? <Bot size={16} color="#475569" /> : (p2Name ? p2Name[0].toUpperCase() : 'P2')}
+            {isVsAi ? <Bot size={15} color="#475569" /> : (p2Name ? p2Name[0].toUpperCase() : 'P2')}
           </div>
         </div>
       </div>

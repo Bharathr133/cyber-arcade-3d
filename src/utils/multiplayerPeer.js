@@ -24,7 +24,10 @@ class StandardMultiplayer {
       onMove: null,
       onReset: null,
       onConnect: null,
-      onDisconnect: null
+      onDisconnect: null,
+      onStartMatch: null,
+      onPeerProfile: null,
+      onSettingsChange: null
     };
     this.heartbeatInterval = null;
   }
@@ -123,6 +126,12 @@ class StandardMultiplayer {
         this.handlers.onMove(data.payload);
       } else if (data.type === 'RESET' && this.handlers.onReset) {
         this.handlers.onReset();
+      } else if (data.type === 'START_MATCH' && this.handlers.onStartMatch) {
+        this.handlers.onStartMatch(data.payload);
+      } else if (data.type === 'PEER_PROFILE' && this.handlers.onPeerProfile) {
+        this.handlers.onPeerProfile(data.payload);
+      } else if (data.type === 'SETTINGS_CHANGE' && this.handlers.onSettingsChange) {
+        this.handlers.onSettingsChange(data.payload);
       }
     });
 
@@ -153,6 +162,36 @@ class StandardMultiplayer {
         this.conn.send({ type: 'RESET' });
       } catch (e) {
         console.error('Failed to send reset over WebRTC:', e);
+      }
+    }
+  }
+
+  sendStartMatch(payload) {
+    if (this.conn && this.conn.open) {
+      try {
+        this.conn.send({ type: 'START_MATCH', payload });
+      } catch (e) {
+        console.error('Failed to send start match over WebRTC:', e);
+      }
+    }
+  }
+
+  sendPeerProfile(payload) {
+    if (this.conn && this.conn.open) {
+      try {
+        this.conn.send({ type: 'PEER_PROFILE', payload });
+      } catch (e) {
+        console.error('Failed to send peer profile over WebRTC:', e);
+      }
+    }
+  }
+
+  sendSettingsChange(payload) {
+    if (this.conn && this.conn.open) {
+      try {
+        this.conn.send({ type: 'SETTINGS_CHANGE', payload });
+      } catch (e) {
+        console.error('Failed to send settings change over WebRTC:', e);
       }
     }
   }

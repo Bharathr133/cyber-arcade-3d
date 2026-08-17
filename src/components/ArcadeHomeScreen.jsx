@@ -7,6 +7,8 @@ export default function ArcadeHomeScreen({
   onSelectGame,
   onOpenProfile,
   onOpenStats,
+  onOpenSettings,
+  onOpenLeaderboard,
   stats
 }) {
   const currentAvatar = AVATARS.find(a => a.id === profile?.avatarId) || AVATARS[0];
@@ -134,22 +136,38 @@ export default function ArcadeHomeScreen({
         </div>
 
         {/* Quick Career Stats / Action Buttons */}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={onOpenLeaderboard}
+            className="btn-secondary"
+            style={{ padding: '8px 14px', fontSize: '12px', borderColor: '#fde68a', background: '#fffbeb', color: '#b45309' }}
+          >
+            <Trophy size={14} color="#d97706" />
+            <span>GLOBAL TOP 50</span>
+          </button>
+
+          <button
+            onClick={onOpenSettings}
+            className="btn-secondary"
+            style={{ padding: '8px 14px', fontSize: '12px' }}
+          >
+            <Sparkles size={14} color="#2563eb" />
+            <span>RULES & TIMERS</span>
+          </button>
+
           <button
             onClick={onOpenStats}
             className="btn-secondary"
-            style={{ padding: '8px 16px', fontSize: '12px' }}
+            style={{ padding: '8px 14px', fontSize: '12px' }}
           >
-            <Trophy size={15} color="#92400e" />
             <span>CAREER STATS ({winRate}% WR)</span>
           </button>
 
           <button
             onClick={onOpenProfile}
             className="btn-primary"
-            style={{ padding: '8px 16px', fontSize: '12px' }}
+            style={{ padding: '8px 14px', fontSize: '12px' }}
           >
-            <Sparkles size={15} />
             <span>EDIT PROFILE</span>
           </button>
         </div>

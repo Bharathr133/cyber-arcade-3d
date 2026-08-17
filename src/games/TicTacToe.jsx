@@ -8,6 +8,7 @@ import { saveGameState, loadGameState } from '../utils/gameStateStorage.js';
 import StandardQrModal from '../components/StandardQrModal.jsx';
 import MatchPlayerBar from '../components/MatchPlayerBar.jsx';
 import MatchResultModal from '../components/MatchResultModal.jsx';
+import MatchLobbyReadyModal from '../components/MatchLobbyReadyModal.jsx';
 
 const DEFAULT_TTT_STATE = {
   board: Array(9).fill(null),
@@ -19,7 +20,8 @@ const DEFAULT_TTT_STATE = {
   history: []
 };
 
-export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatchFinished, onGoHome }) {
+export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', settings, onMatchFinished, onGoHome }) {
+  const turnTimeLimit = settings?.turnTimeLimit !== undefined ? settings.turnTimeLimit : 30;
   const isJoinedGuest = typeof window !== 'undefined' && window.location.search.includes('join=');
   const effectiveMode = isJoinedGuest ? 'ONLINE_QR' : initialMode;
 
@@ -43,8 +45,13 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
     xpGained: 0
   });
 
-  // QR Modal State
+  // Turn Clock & Forfeit State (30s per turn)
+  const [timeLeft, setTimeLeft] = useState(30);
+
+  // QR & Lobby Modal State
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isLobbyReady, setIsLobbyReady] = useState(false);
+  const [opponentProfile, setOpponentProfile] = useState({ name: 'Opponent', avatarId: '2', rating: 1200 });
   const [shareUrl, setShareUrl] = useState('');
   const [isConnected, setIsConnected] = useState(false);
 
@@ -59,6 +66,7 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
   const isXNextRef = useRef(isXNext);
   isXNextRef.current = isXNext;
   const aiTimeoutRef = useRef(null);
+  const resultModalTimeoutRef = useRef(null);
 
   const persistCurrentState = (updatedBoard, nextTurn, updatedScores, curWinner, curLine, updatedHistory) => {
     saveGameState('tictactoe', {
@@ -97,6 +105,10 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
       clearTimeout(aiTimeoutRef.current);
       aiTimeoutRef.current = null;
     }
+    if (resultModalTimeoutRef.current) {
+      clearTimeout(resultModalTimeoutRef.current);
+      resultModalTimeoutRef.current = null;
+    }
     setIsAiThinking(false);
     const emptyBoard = Array(9).fill(null);
     setBoard(emptyBoard);
@@ -104,6 +116,7 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
     setWinner(null);
     setWinningLine([]);
     setHistory([]);
+    setTimeLeft(turnTimeLimit > 0 ? turnTimeLimit : 30);
     setResultModal({ isOpen: false, outcome: null, ratingDelta: 0, xpGained: 0 });
 
     persistCurrentState(emptyBoard, true, scores, null, [], []);
@@ -111,7 +124,7 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
     if (sendSync && gameMode === 'ONLINE_QR') {
       standardMultiplayer.sendReset();
     }
-  }, [gameMode, scores]);
+  }, [gameMode, scores, turnTimeLimit]);
 
   const applyMove = useCallback((index, symbol, isRemote = false) => {
     const curBoard = boardRef.current;
@@ -178,7 +191,8 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
         onMatchFinished('tictactoe', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2');
       }
 
-      setTimeout(() => {
+      if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
+      resultModalTimeoutRef.current = setTimeout(() => {
         setResultModal({
           isOpen: true,
           outcome,
@@ -197,10 +211,99 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
     }
   }, [gameMode, scores, onMatchFinished]);
 
+  const handleTimeoutForfeit = useCallback((timedOutSymbol) => {
+    if (winnerRef.current) return;
+    const winningSymbol = timedOutSymbol === 'X' ? 'O' : 'X';
+    setWinner(winningSymbol);
+    soundSynth.playVictory();
+
+    const outcome = (gameMode === 'ONLINE_QR' && myRoleRef.current !== winningSymbol) ? 'LOSS' : (gameMode === 'VS_COMPUTER' && timedOutSymbol === 'X' ? 'LOSS' : 'WIN');
+    const delta = outcome === 'WIN' ? 20 : -10;
+    const xp = outcome === 'WIN' ? 40 : 10;
+
+    const updatedScores = { ...scores };
+    if (winningSymbol === 'X') updatedScores.x = (updatedScores.x || 0) + 1;
+    else updatedScores.o = (updatedScores.o || 0) + 1;
+    setScores(updatedScores);
+
+    if (outcome === 'WIN') {
+      try { confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } }); } catch (e) {}
+    }
+
+    if (onMatchFinished) {
+      onMatchFinished('tictactoe', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent');
+    }
+
+    if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
+    resultModalTimeoutRef.current = setTimeout(() => {
+      setResultModal({
+        isOpen: true,
+        outcome,
+        ratingDelta: delta,
+        xpGained: xp
+      });
+    }, 400);
+  }, [gameMode, scores, onMatchFinished]);
+
+  const handleTimeoutForfeitRef = useRef(handleTimeoutForfeit);
+  handleTimeoutForfeitRef.current = handleTimeoutForfeit;
+
+  // Active Blitz Turn Timer (Customizable)
+  useEffect(() => {
+    if (winner || turnTimeLimit === 0) return;
+    setTimeLeft(turnTimeLimit);
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        const next = prev - 1;
+        if (next <= 5 && next > 0) {
+          soundSynth.playClick();
+        }
+        return next >= 0 ? next : 0;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isXNext, winner, turnTimeLimit]);
+
+  // Safe Timeout Trigger (Runs cleanly outside reducer only when match has started)
+  useEffect(() => {
+    if (timeLeft === 0 && !winner && turnTimeLimit > 0 && history.length > 0) {
+      handleTimeoutForfeitRef.current(isXNext ? 'X' : 'O');
+    }
+  }, [timeLeft, winner, turnTimeLimit, isXNext, history.length]);
+
+  // Online Disconnect Forfeit (15s Reconnect Grace Period)
+  useEffect(() => {
+    let disconnectTimer = null;
+    if (gameMode === 'ONLINE_QR' && !isConnected && !winner && history.length > 0) {
+      disconnectTimer = setTimeout(() => {
+        if (!isConnected && !winnerRef.current) {
+          handleTimeoutForfeitRef.current(myRoleRef.current === 'X' ? 'O' : 'X');
+        }
+      }, 15000);
+    }
+    return () => {
+      if (disconnectTimer) clearTimeout(disconnectTimer);
+    };
+  }, [gameMode, isConnected, winner, history.length]);
+
   const applyMoveRef = useRef(applyMove);
   applyMoveRef.current = applyMove;
   const resetGameRef = useRef(resetGame);
   resetGameRef.current = resetGame;
+
+  const handleStartMatch = useCallback((broadcast = true) => {
+    setIsLobbyReady(false);
+    setIsQrModalOpen(false);
+    soundSynth.playVictory();
+    if (broadcast && gameMode === 'ONLINE_QR') {
+      standardMultiplayer.sendStartMatch({});
+    }
+  }, [gameMode]);
+
+  const handleStartMatchRef = useRef(handleStartMatch);
+  handleStartMatchRef.current = handleStartMatch;
 
   // Stable WebRTC Setup
   useEffect(() => {
@@ -213,9 +316,28 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
         onReset: () => resetGameRef.current(false),
         onConnect: () => {
           setIsConnected(true);
+          setIsQrModalOpen(false);
+          setIsLobbyReady(true);
           soundSynth.playVictory();
+          // Send profile info to peer
+          standardMultiplayer.sendPeerProfile({
+            name: profile?.name || 'Player',
+            avatarId: profile?.avatarId || '1',
+            rating: profile?.rating || 1200
+          });
         },
-        onDisconnect: () => setIsConnected(false)
+        onPeerProfile: (peerProfile) => {
+          if (peerProfile) {
+            setOpponentProfile(peerProfile);
+          }
+        },
+        onStartMatch: () => {
+          handleStartMatchRef.current(false);
+        },
+        onDisconnect: () => {
+          setIsConnected(false);
+          setIsLobbyReady(false);
+        }
       };
 
       if (joinParam) {
@@ -234,7 +356,7 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
         standardMultiplayer.cleanup();
       };
     }
-  }, [gameMode]);
+  }, [gameMode, profile?.name, profile?.avatarId, profile?.rating]);
 
   const handleClick = (index) => {
     if (isAiThinking || winner) return;
@@ -315,11 +437,15 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
   return (
     <div style={{
       width: '100%',
-      maxWidth: '420px',
+      maxWidth: 'min(380px, calc(100dvh - 125px), 100vw)',
+      height: '100%',
       display: 'flex',
       flexDirection: 'column',
+      justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '0 4px'
+      padding: '0',
+      boxSizing: 'border-box',
+      overflow: 'hidden'
     }}>
       {/* Focused Match Controls: Mobile Adaptive Header */}
       <div style={{
@@ -327,9 +453,9 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '12px',
-        flexWrap: 'wrap',
-        gap: '8px'
+        marginBottom: '6px',
+        flexWrap: 'nowrap',
+        gap: '6px'
       }}>
         {/* Active Mode Pill */}
         <div style={{
@@ -410,6 +536,7 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
           winner === 'O' ? (gameMode === 'VS_COMPUTER' ? 'AI WINS' : 'O WINS') :
           winner === 'DRAW' ? 'DRAW' : null
         }
+        timeLeft={timeLeft}
       />
 
       {/* 100% Fluid Mobile 3x3 Grid Board */}
@@ -481,21 +608,41 @@ export default function TicTacToe({ profile, initialMode = 'VS_COMPUTER', onMatc
         gameTitle="TIC-TAC-TOE"
       />
 
+      {/* Match Lobby Ready Modal (Synchronized START for both players) */}
+      <MatchLobbyReadyModal
+        isOpen={isLobbyReady}
+        gameTitle="TIC-TAC-TOE"
+        myProfile={profile}
+        opponentProfile={opponentProfile}
+        settings={settings}
+        onStartMatch={() => handleStartMatch(true)}
+      />
+
       {/* Post-Match Victory / Defeat / Draw Result Modal */}
       <MatchResultModal
         isOpen={resultModal.isOpen}
-        onClose={() => setResultModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => {
+          setResultModal(prev => ({ ...prev, isOpen: false }));
+          resetGame(true);
+        }}
         outcome={resultModal.outcome}
-        gameTitle="Tic-Tac-Toe (3x3)"
-        opponentName={gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2'}
+        gameTitle="Tic-Tac-Toe (3×3)"
+        opponentName={gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent'}
         ratingDelta={resultModal.ratingDelta}
         xpGained={resultModal.xpGained}
         currentRating={profile?.rating || 1200}
         level={profile?.level || 1}
         xp={profile?.xp || 0}
         movesCount={history.length}
-        onRematch={() => resetGame(true)}
-        onGoHome={onGoHome}
+        onRematch={() => {
+          setResultModal(prev => ({ ...prev, isOpen: false }));
+          resetGame(true);
+        }}
+        onGoHome={() => {
+          setResultModal(prev => ({ ...prev, isOpen: false }));
+          resetGame(true);
+          onGoHome();
+        }}
       />
     </div>
   );
