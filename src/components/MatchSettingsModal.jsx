@@ -91,9 +91,9 @@ export default function MatchSettingsModal({
       <div
         className="card-enterprise animate-pop-in"
         style={{
-          width: 'min(92vw, 440px)',
-          maxHeight: '90vh',
-          padding: 'clamp(20px, 5vw, 28px)',
+          width: 'min(95vw, 440px)',
+          maxHeight: '90dvh',
+          padding: 'clamp(14px, 4vw, 24px)',
           background: '#ffffff',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
           borderRadius: '24px',
@@ -101,10 +101,12 @@ export default function MatchSettingsModal({
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'auto',
+          overflowX: 'hidden',
           boxSizing: 'border-box',
           margin: 'auto'
         }}
       >
+
         {/* Close Button */}
         <button
           onClick={onClose}

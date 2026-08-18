@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RotateCcw, User, Bot, QrCode, Wifi } from 'lucide-react';
+import { RotateCcw, User, Bot, Wifi } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { soundSynth } from '../utils/soundSynth.js';
-import { standardMultiplayer } from '../utils/multiplayerPeer.js';
-import { securityEngine } from '../utils/securityEngine.js';
+import { realtimeManager } from '../services/realtimeManager.js';
+import { gameEngineService } from '../services/gameEngineService.js';
 import { saveGameState, loadGameState } from '../utils/gameStateStorage.js';
-import StandardQrModal from '../components/StandardQrModal.jsx';
+import { getUserProfile } from '../utils/userProfile.js';
+import LiveEmojiReactionSystem from '../components/LiveEmojiReactionSystem.jsx';
 import MatchPlayerBar from '../components/MatchPlayerBar.jsx';
 import MatchResultModal from '../components/MatchResultModal.jsx';
-import MatchLobbyReadyModal from '../components/MatchLobbyReadyModal.jsx';
 
 const COLS = 7;
 const ROWS = 6;
 const EMPTY = 0;
-const RED = 1; // Player 1 / Human
-const YELLOW = 2; // Player 2 / AI / Guest
+const RED = 1; // Player 1 (Host / Red)
+const YELLOW = 2; // Player 2 (Guest / Yellow)
 
 const DEFAULT_C4_STATE = {
   board: Array(ROWS).fill(null).map(() => Array(COLS).fill(EMPTY)),
@@ -26,23 +26,32 @@ const DEFAULT_C4_STATE = {
   history: []
 };
 
-export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', settings, onMatchFinished, onGoHome }) {
+export default function ConnectFour({ 
+  profile, 
+  initialMode = 'VS_COMPUTER', 
+  onlineSession = null, 
+  settings, 
+  onMatchFinished, 
+  onGoHome 
+}) {
+  const isOnline = initialMode === 'ONLINE_MATCH' && !!onlineSession?.matchId;
   const turnTimeLimit = settings?.turnTimeLimit !== undefined ? settings.turnTimeLimit : 30;
-  const isJoinedGuest = typeof window !== 'undefined' && window.location.search.includes('join=');
-  const effectiveMode = isJoinedGuest ? 'ONLINE_QR' : initialMode;
 
   const [initialState] = useState(() => loadGameState('connect4', DEFAULT_C4_STATE));
 
   const [board, setBoard] = useState(initialState.board);
   const [currentPlayer, setCurrentPlayer] = useState(initialState.currentPlayer);
-  const [gameMode] = useState(effectiveMode);
-  const [myRole, setMyRole] = useState(isJoinedGuest ? YELLOW : RED);
+  const [gameMode] = useState(isOnline ? 'ONLINE_MATCH' : initialMode);
+  const [myRole, setMyRole] = useState(onlineSession?.myRole === 'O' ? YELLOW : RED);
   const [winner, setWinner] = useState(initialState.winner);
   const [winningCells, setWinningCells] = useState(initialState.winningCells || []);
   const [scores, setScores] = useState(initialState.scores || { red: 0, yellow: 0, draws: 0 });
   const [history, setHistory] = useState(initialState.history || []);
   const [hoveredCol, setHoveredCol] = useState(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isSubmittingMove, setIsSubmittingMove] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('CONNECTED');
+  const [disconnectCountdown, setDisconnectCountdown] = useState(null);
 
   // Result Modal State
   const [resultModal, setResultModal] = useState({
@@ -52,15 +61,10 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
     xpGained: 0
   });
 
-  // Turn Clock & Forfeit State (30s per turn)
+  // Turn Clock
   const [timeLeft, setTimeLeft] = useState(30);
-
-  // QR & Lobby Modal State
-  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [isLobbyReady, setIsLobbyReady] = useState(false);
-  const [opponentProfile, setOpponentProfile] = useState({ name: 'Opponent', avatarId: '2', rating: 1200 });
-  const [shareUrl, setShareUrl] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
+  const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || { name: 'Opponent', avatarId: '2', rating: 1200 });
+  const [incomingReaction, setIncomingReaction] = useState(null);
 
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -75,28 +79,216 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
   const aiTimeoutRef = useRef(null);
   const resultModalTimeoutRef = useRef(null);
 
-  const persistCurrentState = (updatedBoard, nextPlayer, updatedScores, curWinner, curWinningCells, updatedHistory) => {
-    saveGameState('connect4', {
-      board: updatedBoard,
-      currentPlayer: nextPlayer,
-      scores: updatedScores,
-      winner: curWinner,
-      winningCells: curWinningCells,
-      history: updatedHistory,
-      gameMode,
-      myRole: myRoleRef.current
-    });
+
+  const checkWin = (grid) => {
+    // 1. Horizontal
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS - 3; c++) {
+        const val = grid[r][c];
+        if (val !== EMPTY && val === grid[r][c+1] && val === grid[r][c+2] && val === grid[r][c+3]) {
+          return { winner: val, cells: [[r, c], [r, c+1], [r, c+2], [r, c+3]] };
+        }
+      }
+    }
+
+    // 2. Vertical
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS - 3; r++) {
+        const val = grid[r][c];
+        if (val !== EMPTY && val === grid[r+1][c] && val === grid[r+2][c] && val === grid[r+3][c]) {
+          return { winner: val, cells: [[r, c], [r+1, c], [r+2, c], [r+3, c]] };
+        }
+      }
+    }
+
+    // 3. Diagonal Up-Right
+    for (let r = 3; r < ROWS; r++) {
+      for (let c = 0; c < COLS - 3; c++) {
+        const val = grid[r][c];
+        if (val !== EMPTY && val === grid[r-1][c+1] && val === grid[r-2][c+2] && val === grid[r-3][c+3]) {
+          return { winner: val, cells: [[r, c], [r-1, c+1], [r-2, c+2], [r-3, c+3]] };
+        }
+      }
+    }
+
+    // 4. Diagonal Down-Right
+    for (let r = 0; r < ROWS - 3; r++) {
+      for (let c = 0; c < COLS - 3; c++) {
+        const val = grid[r][c];
+        if (val !== EMPTY && val === grid[r+1][c+1] && val === grid[r+2][c+2] && val === grid[r+3][c+3]) {
+          return { winner: val, cells: [[r, c], [r+1, c+1], [r+2, c+2], [r+3, c+3]] };
+        }
+      }
+    }
+
+    // 5. Draw
+    const isFull = grid[0].every(cell => cell !== EMPTY);
+    if (isFull) return { winner: 'DRAW', cells: [] };
+
+    return null;
   };
 
-  const resetGame = useCallback((sendSync = false) => {
-    if (aiTimeoutRef.current) {
-      clearTimeout(aiTimeoutRef.current);
-      aiTimeoutRef.current = null;
+  // Realtime Integration for Online Match
+  useEffect(() => {
+    if (!isOnline || !onlineSession?.matchId) return;
+
+    setMyRole(onlineSession.myRole === 'O' ? YELLOW : RED);
+    if (onlineSession.opponent) setOpponentProfile(onlineSession.opponent);
+
+    const matchId = onlineSession.matchId;
+
+    realtimeManager.subscribeToMatch(matchId, profile?.id, {
+      onReactionEmoji: (reactionData) => {
+        if (reactionData) {
+          setIncomingReaction({
+            emoji: reactionData.emoji,
+            sender: reactionData.sender,
+            timestamp: Date.now()
+          });
+        }
+      },
+      onStateUpdate: (serverState) => {
+
+        if (!serverState) return;
+        const incomingBoard = serverState.board_state || serverState.board;
+        const rawTurn = serverState.current_turn || serverState.turn;
+        const incomingTurn = (rawTurn === 'X' || rawTurn === 'RED' || rawTurn === 'P1' || rawTurn === 1 || rawTurn === '1' || rawTurn === RED) ? RED : YELLOW;
+        const incomingResult = serverState.status || serverState.result;
+
+        const winnerId = serverState.winner_id || serverState.winnerId;
+
+        if (incomingBoard) {
+          setBoard(incomingBoard);
+          setCurrentPlayer(incomingTurn);
+
+          if (incomingResult && incomingResult !== 'ACTIVE') {
+            const isWin = incomingResult === 'WIN';
+            const winPiece = isWin ? (winnerId === profile?.id ? myRoleRef.current : (myRoleRef.current === RED ? YELLOW : RED)) : 'DRAW';
+            setWinner(winPiece);
+
+            const outcome = winnerId === profile?.id ? 'WIN' : (incomingResult === 'DRAW' ? 'DRAW' : 'LOSS');
+            const delta = outcome === 'WIN' ? 16 : (outcome === 'DRAW' ? 0 : -16);
+
+            setResultModal({
+              isOpen: true,
+              outcome,
+              ratingDelta: delta,
+              xpGained: outcome === 'WIN' ? 30 : 10
+            });
+
+            if (onMatchFinished) {
+              onMatchFinished('connect4', outcome, opponentProfile?.name || 'Opponent');
+            }
+          }
+        }
+      },
+      onOpponentDisconnect: () => {
+        setConnectionStatus('OPPONENT_DISCONNECTED');
+        let count = 30;
+        setDisconnectCountdown(count);
+        const timer = setInterval(() => {
+          count -= 1;
+          setDisconnectCountdown(count);
+          if (count <= 0) {
+            clearInterval(timer);
+            setWinner(myRoleRef.current);
+            setResultModal({
+              isOpen: true,
+              outcome: 'WIN',
+              ratingDelta: 16,
+              xpGained: 30
+            });
+            if (onMatchFinished) {
+              onMatchFinished('connect4', 'WIN', opponentProfile?.name || 'Opponent');
+            }
+          }
+        }, 1000);
+      },
+      onOpponentReconnect: () => {
+        setConnectionStatus('CONNECTED');
+        setDisconnectCountdown(null);
+      },
+      onMatchAbandoned: () => {
+        setWinner(myRoleRef.current);
+        setResultModal({
+          isOpen: true,
+          outcome: 'WIN',
+          ratingDelta: 16,
+          xpGained: 30
+        });
+        if (onMatchFinished) {
+          onMatchFinished('connect4', 'WIN', opponentProfile?.name || 'Opponent');
+        }
+      }
+    });
+
+
+    // Refresh Recovery: Synchronize current authoritative match state & opponent profile
+    async function syncLatestState() {
+      try {
+        const supabase = getSupabase();
+        if (supabase && matchId) {
+          const { data: stateData } = await supabase
+            .from('game_states')
+            .select('*')
+            .eq('match_id', matchId)
+            .maybeSingle();
+
+          if (stateData) {
+            const rawBoard = stateData.board_state || stateData.board;
+            const rawTurn = stateData.current_turn || stateData.turn;
+            const rawResult = stateData.status || stateData.result;
+            const winnerId = stateData.winner_id || stateData.winnerId;
+            if (rawBoard) {
+              setBoard(rawBoard);
+              const incomingTurn = (rawTurn === 'X' || rawTurn === 'RED' || rawTurn === 'P1') ? RED : YELLOW;
+              setCurrentPlayer(incomingTurn);
+              if (rawResult && rawResult !== 'ACTIVE') {
+                const isWin = rawResult === 'WIN';
+                const winPiece = isWin ? (winnerId === profile?.id ? myRoleRef.current : (myRoleRef.current === RED ? YELLOW : RED)) : 'DRAW';
+                setWinner(winPiece);
+              }
+            }
+          }
+
+          const { data: matchData } = await supabase
+            .from('matches')
+            .select('player_1_id, player_2_id')
+            .eq('id', matchId)
+            .maybeSingle();
+
+          if (matchData) {
+            const oppId = (matchData.player_1_id === profile?.id) ? matchData.player_2_id : matchData.player_1_id;
+            if (oppId) {
+              const { data: oppProfile } = await supabase
+                .from('profiles')
+                .select('id, username, display_name, avatar_url')
+                .eq('id', oppId)
+                .maybeSingle();
+
+              if (oppProfile) {
+                setOpponentProfile({
+                  name: oppProfile.display_name || oppProfile.username || 'Opponent',
+                  avatarId: oppProfile.avatar_url || '2',
+                  rating: 1200
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {}
     }
-    if (resultModalTimeoutRef.current) {
-      clearTimeout(resultModalTimeoutRef.current);
-      resultModalTimeoutRef.current = null;
-    }
+
+    syncLatestState();
+
+    return () => {
+      realtimeManager.unsubscribe();
+    };
+  }, [isOnline, onlineSession?.matchId, profile?.id, onGoHome]);
+
+  const resetGame = useCallback(() => {
+    if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
+    if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
     setIsAiThinking(false);
     const emptyBoard = Array(ROWS).fill(null).map(() => Array(COLS).fill(EMPTY));
     setBoard(emptyBoard);
@@ -107,480 +299,146 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
     setHoveredCol(null);
     setTimeLeft(turnTimeLimit > 0 ? turnTimeLimit : 30);
     setResultModal({ isOpen: false, outcome: null, ratingDelta: 0, xpGained: 0 });
+  }, [turnTimeLimit]);
 
-    persistCurrentState(emptyBoard, RED, scores, null, [], []);
-
-    if (sendSync && gameMode === 'ONLINE_QR') {
-      standardMultiplayer.sendReset();
-    }
-  }, [gameMode, scores, turnTimeLimit]);
-
-  const checkWin = (grid) => {
-    // 1. Horizontal
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c <= COLS - 4; c++) {
-        const p = grid[r][c];
-        if (p !== EMPTY && p === grid[r][c+1] && p === grid[r][c+2] && p === grid[r][c+3]) {
-          return { winner: p, cells: [[r,c], [r,c+1], [r,c+2], [r,c+3]] };
-        }
-      }
-    }
-    // 2. Vertical
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 0; r <= ROWS - 4; r++) {
-        const p = grid[r][c];
-        if (p !== EMPTY && p === grid[r+1][c] && p === grid[r+2][c] && p === grid[r+3][c]) {
-          return { winner: p, cells: [[r,c], [r+1,c], [r+2,c], [r+3,c]] };
-        }
-      }
-    }
-    // 3. Diagonal Up-Right
-    for (let r = 3; r < ROWS; r++) {
-      for (let c = 0; c <= COLS - 4; c++) {
-        const p = grid[r][c];
-        if (p !== EMPTY && p === grid[r-1][c+1] && p === grid[r-2][c+2] && p === grid[r-3][c+3]) {
-          return { winner: p, cells: [[r,c], [r-1,c+1], [r-2,c+2], [r-3,c+3]] };
-        }
-      }
-    }
-    // 4. Diagonal Down-Right
-    for (let r = 0; r <= ROWS - 4; r++) {
-      for (let c = 0; c <= COLS - 4; c++) {
-        const p = grid[r][c];
-        if (p !== EMPTY && p === grid[r+1][c+1] && p === grid[r+2][c+2] && p === grid[r+3][c+3]) {
-          return { winner: p, cells: [[r,c], [r+1,c+1], [r+2,c+2], [r+3,c+3]] };
-        }
-      }
-    }
-
-    const isFull = grid.every(row => row.every(cell => cell !== EMPTY));
-    if (isFull) return { winner: 'DRAW', cells: [] };
-
-    return null;
-  };
-
-  const applyDropToken = useCallback((colIdx, playerToDrop, isRemote = false) => {
-    const curBoard = boardRef.current;
-    if (winnerRef.current) return false;
-
-    if (isRemote) {
-      const isValid = securityEngine.validateConnectFourMove(
-        { colIdx, player: playerToDrop },
-        curBoard,
-        myRoleRef.current === RED ? YELLOW : RED,
-        currentPlayerRef.current
-      );
-      if (!isValid) {
-        console.warn('Anti-Cheat: Rejected remote Connect 4 move:', { colIdx, playerToDrop });
-        return false;
-      }
-    }
+  const handleDropToken = async (colIdx) => {
+    if (winner || isAiThinking || isSubmittingMove) return;
 
     let targetRow = -1;
     for (let r = ROWS - 1; r >= 0; r--) {
-      if (curBoard[r][colIdx] === EMPTY) {
+      if (board[r][colIdx] === EMPTY) {
         targetRow = r;
         break;
       }
     }
+    if (targetRow === -1) return;
 
-    if (targetRow === -1) return false;
+    if (isOnline) {
+      if (currentPlayer !== myRole) return;
 
-    soundSynth.playRotate();
+      setIsSubmittingMove(true);
+      soundSynth.playRotate();
 
-    const newBoard = curBoard.map(row => [...row]);
-    newBoard[targetRow][colIdx] = playerToDrop;
-    const newHistory = [...historyRef.current, { r: targetRow, c: colIdx, player: playerToDrop }];
-
-    setBoard(newBoard);
-    setHistory(newHistory);
-
-    const winResult = checkWin(newBoard);
-    if (winResult) {
-      setWinner(winResult.winner);
-      setWinningCells(winResult.cells);
-      soundSynth.playVictory();
-
-      let outcome = 'DRAW';
-      let delta = 2;
-      let xp = 15;
-
-      const updatedScores = { ...scores };
-
-      if (winResult.winner === RED) {
-        updatedScores.red = (updatedScores.red || 0) + 1;
-        outcome = (gameMode === 'ONLINE_QR' && myRoleRef.current !== RED) ? 'LOSS' : 'WIN';
-        delta = outcome === 'WIN' ? 16 : -10;
-        xp = outcome === 'WIN' ? 30 : 10;
-      } else if (winResult.winner === YELLOW) {
-        updatedScores.yellow = (updatedScores.yellow || 0) + 1;
-        outcome = (gameMode === 'ONLINE_QR' && myRoleRef.current === YELLOW) ? 'WIN' : (gameMode === 'VS_COMPUTER' ? 'LOSS' : 'WIN');
-        delta = outcome === 'WIN' ? 16 : -10;
-        xp = outcome === 'WIN' ? 30 : 10;
-      } else {
-        updatedScores.draws = (updatedScores.draws || 0) + 1;
-      }
-
-      setScores(updatedScores);
-      persistCurrentState(newBoard, playerToDrop, updatedScores, winResult.winner, winResult.cells, newHistory);
-
-      if (winResult.winner !== 'DRAW' && outcome === 'WIN') {
-        try { confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } }); } catch (e) {}
-      }
-
-      if (onMatchFinished) {
-        onMatchFinished('connect4', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2');
-      }
-
-      if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
-      resultModalTimeoutRef.current = setTimeout(() => {
-        setResultModal({
-          isOpen: true,
-          outcome,
-          ratingDelta: delta,
-          xpGained: xp
-        });
-      }, 450);
-    } else {
-      const nextTurn = playerToDrop === RED ? YELLOW : RED;
+      // Optimistic instant board update
+      const optimisticBoard = board.map(row => [...row]);
+      optimisticBoard[targetRow][colIdx] = myRole;
+      const nextTurn = myRole === RED ? YELLOW : RED;
+      setBoard(optimisticBoard);
       setCurrentPlayer(nextTurn);
-      persistCurrentState(newBoard, nextTurn, scores, null, [], newHistory);
-    }
 
-    if (!isRemote && gameMode === 'ONLINE_QR') {
-      standardMultiplayer.sendMove({ colIdx, player: playerToDrop });
-    }
+      const winResult = checkWin(optimisticBoard);
+      const isWin = winResult?.winner && winResult.winner !== 'DRAW';
+      const isDraw = winResult?.winner === 'DRAW';
+      const outcomeResult = isWin ? 'WIN' : (isDraw ? 'DRAW' : 'ACTIVE');
 
-    return true;
-  }, [gameMode, scores, onMatchFinished]);
-
-  const handleTimeoutForfeit = useCallback((timedOutPlayer) => {
-    if (winnerRef.current) return;
-    const winningPlayer = timedOutPlayer === RED ? YELLOW : RED;
-    setWinner(winningPlayer);
-    soundSynth.playVictory();
-
-    const outcome = (gameMode === 'ONLINE_QR' && myRoleRef.current !== winningPlayer) ? 'LOSS' : (gameMode === 'VS_COMPUTER' && timedOutPlayer === RED ? 'LOSS' : 'WIN');
-    const delta = outcome === 'WIN' ? 25 : -10;
-    const xp = outcome === 'WIN' ? 50 : 10;
-
-    const updatedScores = { ...scores };
-    if (winningPlayer === RED) updatedScores.red = (updatedScores.red || 0) + 1;
-    else updatedScores.yellow = (updatedScores.yellow || 0) + 1;
-    setScores(updatedScores);
-
-    if (outcome === 'WIN') {
-      try { confetti({ particleCount: 75, spread: 65, origin: { y: 0.65 } }); } catch (e) {}
-    }
-
-    if (onMatchFinished) {
-      onMatchFinished('connect4', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent');
-    }
-
-    if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
-    resultModalTimeoutRef.current = setTimeout(() => {
-      setResultModal({
-        isOpen: true,
-        outcome,
-        ratingDelta: delta,
-        xpGained: xp
+      // Zero-latency broadcast to opponent (<10ms)
+      realtimeManager.broadcastToMatch(onlineSession.matchId, 'match_move', {
+        board: optimisticBoard,
+        turn: nextTurn,
+        result: outcomeResult,
+        winner_id: isWin ? profile?.id : null
       });
-    }, 400);
-  }, [gameMode, scores, onMatchFinished]);
 
-  const handleTimeoutForfeitRef = useRef(handleTimeoutForfeit);
-  handleTimeoutForfeitRef.current = handleTimeoutForfeit;
+      try {
+        const movePayload = {
+          column: colIdx,
+          row: targetRow,
+          board: optimisticBoard,
+          turn: nextTurn,
+          result: outcomeResult,
+          winnerSymbol: winResult?.winner || null
+        };
+        const res = await gameEngineService.submitMove(onlineSession.matchId, movePayload, profile?.id);
+        if (res?.success && res.state) {
+          const finalBoard = res.state.board || optimisticBoard;
+          setBoard(finalBoard);
+          const rawTurn = res.state.turn || res.state.current_turn;
+          setCurrentPlayer((rawTurn === 'X' || rawTurn === 'RED' || rawTurn === 'P1') ? RED : YELLOW);
 
-  // Active Blitz Turn Timer (Customizable)
-  useEffect(() => {
-    if (winner || turnTimeLimit === 0) return;
-    setTimeLeft(turnTimeLimit);
+          if (res.state.result && res.state.result !== 'ACTIVE') {
+            const isWinMatch = res.state.result === 'WIN';
+            setWinner(isWinMatch ? myRole : 'DRAW');
 
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => {
-        const next = prev - 1;
-        if (next <= 5 && next > 0) {
-          soundSynth.playClick();
-        }
-        return next >= 0 ? next : 0;
-      });
-    }, 1000);
+            const outcome = res.state.winner_id === profile?.id ? 'WIN' : (res.state.result === 'DRAW' ? 'DRAW' : 'LOSS');
+            const delta = outcome === 'WIN' ? 16 : (outcome === 'DRAW' ? 0 : -16);
 
-    return () => clearInterval(interval);
-  }, [currentPlayer, winner, turnTimeLimit]);
+            setResultModal({
+              isOpen: true,
+              outcome,
+              ratingDelta: delta,
+              xpGained: outcome === 'WIN' ? 30 : 10
+            });
 
-  // Safe Timeout Trigger (Runs cleanly outside reducer only when match has started)
-  useEffect(() => {
-    if (timeLeft === 0 && !winner && turnTimeLimit > 0 && history.length > 0) {
-      handleTimeoutForfeitRef.current(currentPlayer);
-    }
-  }, [timeLeft, winner, turnTimeLimit, currentPlayer, history.length]);
-
-  // Online Disconnect Forfeit (15s Reconnect Grace Period)
-  useEffect(() => {
-    let disconnectTimer = null;
-    if (gameMode === 'ONLINE_QR' && !isConnected && !winner && history.length > 0) {
-      disconnectTimer = setTimeout(() => {
-        if (!isConnected && !winnerRef.current) {
-          handleTimeoutForfeitRef.current(myRoleRef.current === RED ? YELLOW : RED);
-        }
-      }, 15000);
-    }
-    return () => {
-      if (disconnectTimer) clearTimeout(disconnectTimer);
-    };
-  }, [gameMode, isConnected, winner, history.length]);
-
-  const applyDropTokenRef = useRef(applyDropToken);
-  applyDropTokenRef.current = applyDropToken;
-  const resetGameRef = useRef(resetGame);
-  resetGameRef.current = resetGame;
-
-  const handleStartMatch = useCallback((broadcast = true) => {
-    setIsLobbyReady(false);
-    setIsQrModalOpen(false);
-    soundSynth.playVictory();
-    if (broadcast && gameMode === 'ONLINE_QR') {
-      standardMultiplayer.sendStartMatch({});
-    }
-  }, [gameMode]);
-
-  const handleStartMatchRef = useRef(handleStartMatch);
-  handleStartMatchRef.current = handleStartMatch;
-
-  // Stable WebRTC Setup
-  useEffect(() => {
-    if (gameMode === 'ONLINE_QR') {
-      const params = new URLSearchParams(window.location.search);
-      const joinParam = params.get('join');
-
-      const handlers = {
-        onMove: (move) => applyDropTokenRef.current(move.colIdx, move.player, true),
-        onReset: () => resetGameRef.current(false),
-        onConnect: () => {
-          setIsConnected(true);
-          setIsQrModalOpen(false);
-          setIsLobbyReady(true);
-          soundSynth.playVictory();
-          // Send profile info to peer
-          standardMultiplayer.sendPeerProfile({
-            name: profile?.name || 'Player',
-            avatarId: profile?.avatarId || '1',
-            rating: profile?.rating || 1200
-          });
-        },
-        onPeerProfile: (peerProfile) => {
-          if (peerProfile) {
-            setOpponentProfile(peerProfile);
+            if (onMatchFinished) {
+              onMatchFinished('connect4', outcome, opponentProfile?.name || 'Opponent');
+            }
           }
-        },
-        onStartMatch: () => {
-          handleStartMatchRef.current(false);
-        },
-        onDisconnect: () => {
-          setIsConnected(false);
-          setIsLobbyReady(false);
         }
-      };
-
-      if (joinParam) {
-        setMyRole(YELLOW);
-        setIsConnected(false);
-        standardMultiplayer.joinRoom(joinParam, handlers);
-      } else {
-        setMyRole(RED);
-        setIsConnected(false);
-        const { shareUrl: url } = standardMultiplayer.createRoom('connect4', handlers);
-        setShareUrl(url);
-        setIsQrModalOpen(true);
+      } catch (e) {
+        console.error('[Connect4 Move Exception]:', e);
+      } finally {
+        setIsSubmittingMove(false);
       }
-
-      return () => {
-        standardMultiplayer.cleanup();
-      };
-    }
-  }, [gameMode, profile?.name, profile?.avatarId, profile?.rating]);
-
-  const handleColumnClick = (c) => {
-    if (isAiThinking || winner) return;
-
-    if (gameMode === 'ONLINE_QR') {
-      if (currentPlayer !== myRole || !isConnected) return;
-      applyDropToken(c, myRole, false);
-    } else if (gameMode === 'VS_COMPUTER') {
-      if (currentPlayer !== RED) return;
-      applyDropToken(c, RED, false);
     } else {
-      applyDropToken(c, currentPlayer, false);
-    }
-  };
+      // Local Mode
+      soundSynth.playRotate();
+      const newBoard = board.map(row => [...row]);
+      newBoard[targetRow][colIdx] = currentPlayer;
+      const newHistory = [...historyRef.current, { col: colIdx, row: targetRow, player: currentPlayer }];
 
-  // Heuristic evaluation of a 4-token window for Connect 4 AI
-  const evaluateWindow = (window, piece) => {
-    let score = 0;
-    const oppPiece = piece === RED ? YELLOW : RED;
-    let pieceCount = 0;
-    let emptyCount = 0;
-    let oppCount = 0;
+      setBoard(newBoard);
+      setHistory(newHistory);
 
-    for (let i = 0; i < 4; i++) {
-      if (window[i] === piece) pieceCount++;
-      else if (window[i] === EMPTY) emptyCount++;
-      else if (window[i] === oppPiece) oppCount++;
-    }
+      const winResult = checkWin(newBoard);
+      if (winResult) {
+        setWinner(winResult.winner);
+        setWinningCells(winResult.cells);
+        soundSynth.playVictory();
 
-    if (pieceCount === 4) {
-      score += 100000;
-    } else if (pieceCount === 3 && emptyCount === 1) {
-      score += 1200;
-    } else if (pieceCount === 2 && emptyCount === 2) {
-      score += 150;
-    }
+        let outcome = 'DRAW';
+        let delta = 2;
+        let xp = 15;
 
-    if (oppCount === 3 && emptyCount === 1) {
-      score -= 2200; // Heavy defense against opponent 3-in-a-row threats
-    } else if (oppCount === 2 && emptyCount === 2) {
-      score -= 200;
-    }
+        const updatedScores = { ...scores };
+        if (winResult.winner === RED) {
+          updatedScores.red = (updatedScores.red || 0) + 1;
+          outcome = 'WIN';
+          delta = 16;
+          xp = 30;
+        } else if (winResult.winner === YELLOW) {
+          updatedScores.yellow = (updatedScores.yellow || 0) + 1;
+          outcome = gameMode === 'VS_COMPUTER' ? 'LOSS' : 'WIN';
+          delta = outcome === 'WIN' ? 16 : -10;
+          xp = outcome === 'WIN' ? 30 : 10;
+        } else {
+          updatedScores.draws = (updatedScores.draws || 0) + 1;
+        }
 
-    return score;
-  };
+        setScores(updatedScores);
+        if (winResult.winner !== 'DRAW' && outcome === 'WIN') {
+          try { confetti({ particleCount: 70, spread: 60, origin: { y: 0.65 } }); } catch (e) {}
+        }
 
-  // Full board positional scoring with center-column bias
-  const scorePosition = (grid, piece) => {
-    let score = 0;
+        if (onMatchFinished) {
+          onMatchFinished('connect4', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2');
+        }
 
-    // Center column control (Column 3 has highest strategic connectivity)
-    let centerCount = 0;
-    for (let r = 0; r < ROWS; r++) {
-      if (grid[r][3] === piece) centerCount++;
-    }
-    score += centerCount * 45;
-
-    // Inner columns (2 and 4)
-    let innerCount = 0;
-    for (let r = 0; r < ROWS; r++) {
-      if (grid[r][2] === piece) innerCount++;
-      if (grid[r][4] === piece) innerCount++;
-    }
-    score += innerCount * 20;
-
-    // Horizontal 4-windows
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c <= COLS - 4; c++) {
-        score += evaluateWindow([grid[r][c], grid[r][c + 1], grid[r][c + 2], grid[r][c + 3]], piece);
-      }
-    }
-
-    // Vertical 4-windows
-    for (let c = 0; c < COLS; c++) {
-      for (let r = 0; r <= ROWS - 4; r++) {
-        score += evaluateWindow([grid[r][c], grid[r + 1][c], grid[r + 2][c], grid[r + 3][c]], piece);
-      }
-    }
-
-    // Diagonal Down-Right
-    for (let r = 0; r <= ROWS - 4; r++) {
-      for (let c = 0; c <= COLS - 4; c++) {
-        score += evaluateWindow([grid[r][c], grid[r + 1][c + 1], grid[r + 2][c + 2], grid[r + 3][c + 3]], piece);
-      }
-    }
-
-    // Diagonal Up-Right
-    for (let r = 3; r < ROWS; r++) {
-      for (let c = 0; c <= COLS - 4; c++) {
-        score += evaluateWindow([grid[r][c], grid[r - 1][c + 1], grid[r - 2][c + 2], grid[r - 3][c + 3]], piece);
-      }
-    }
-
-    return score;
-  };
-
-  const getValidLocations = (grid) => {
-    const valid = [];
-    const searchOrder = [3, 2, 4, 1, 5, 0, 6]; // Center-out search maximizes Alpha-Beta cutoffs
-    for (let c of searchOrder) {
-      if (grid[0][c] === EMPTY) {
-        valid.push(c);
-      }
-    }
-    return valid;
-  };
-
-  const getNextOpenRow = (grid, col) => {
-    for (let r = ROWS - 1; r >= 0; r--) {
-      if (grid[r][col] === EMPTY) return r;
-    }
-    return -1;
-  };
-
-  // Grandmaster Minimax with Alpha-Beta Pruning
-  const minimax = (grid, depth, alpha, beta, isMaximizing) => {
-    const validLocations = getValidLocations(grid);
-    const winResult = checkWin(grid);
-
-    if (winResult) {
-      if (winResult.winner === YELLOW) {
-        return { col: null, score: 1000000 + depth * 1000 };
-      } else if (winResult.winner === RED) {
-        return { col: null, score: -1000000 - depth * 1000 };
+        resultModalTimeoutRef.current = setTimeout(() => {
+          setResultModal({
+            isOpen: true,
+            outcome,
+            ratingDelta: delta,
+            xpGained: xp
+          });
+        }, 450);
       } else {
-        return { col: null, score: 0 }; // Draw
+        const nextPlayer = currentPlayer === RED ? YELLOW : RED;
+        setCurrentPlayer(nextPlayer);
       }
-    }
-
-    if (depth === 0 || validLocations.length === 0) {
-      return { col: null, score: scorePosition(grid, YELLOW) };
-    }
-
-    if (isMaximizing) {
-      let maxScore = -Infinity;
-      let bestCol = validLocations[0];
-
-      for (let col of validLocations) {
-        const row = getNextOpenRow(grid, col);
-        if (row === -1) continue;
-
-        grid[row][col] = YELLOW;
-        const evalResult = minimax(grid, depth - 1, alpha, beta, false);
-        grid[row][col] = EMPTY;
-
-        if (evalResult.score > maxScore) {
-          maxScore = evalResult.score;
-          bestCol = col;
-        }
-
-        alpha = Math.max(alpha, maxScore);
-        if (alpha >= beta) break; // Alpha-Beta Cutoff
-      }
-
-      return { col: bestCol, score: maxScore };
-    } else {
-      let minScore = Infinity;
-      let bestCol = validLocations[0];
-
-      for (let col of validLocations) {
-        const row = getNextOpenRow(grid, col);
-        if (row === -1) continue;
-
-        grid[row][col] = RED;
-        const evalResult = minimax(grid, depth - 1, alpha, beta, true);
-        grid[row][col] = EMPTY;
-
-        if (evalResult.score < minScore) {
-          minScore = evalResult.score;
-          bestCol = col;
-        }
-
-        beta = Math.min(beta, minScore);
-        if (alpha >= beta) break; // Alpha-Beta Cutoff
-      }
-
-      return { col: bestCol, score: minScore };
     }
   };
 
-  // Master Connect 4 AI
+  // Smart Connect 4 AI
   useEffect(() => {
     if (gameMode === 'VS_COMPUTER' && currentPlayer === YELLOW && !winner) {
       setIsAiThinking(true);
@@ -590,61 +448,130 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
         const curBoard = boardRef.current;
         if (winnerRef.current) return;
 
-        // 1. Immediate Win Check (Depth 1 Instant Finisher)
-        for (let c of [3, 2, 4, 1, 5, 0, 6]) {
-          const r = getNextOpenRow(curBoard, c);
+        // Find valid columns
+        const validCols = [];
+        for (let c = 0; c < COLS; c++) {
+          if (curBoard[0][c] === EMPTY) validCols.push(c);
+        }
+        if (validCols.length === 0) return;
+
+        // 1. AI Immediate Win
+        for (let c of validCols) {
+          let r = -1;
+          for (let row = ROWS - 1; row >= 0; row--) {
+            if (curBoard[row][c] === EMPTY) { r = row; break; }
+          }
           if (r !== -1) {
-            curBoard[r][c] = YELLOW;
-            const res = checkWin(curBoard);
-            curBoard[r][c] = EMPTY;
+            const test = curBoard.map(row => [...row]);
+            test[r][c] = YELLOW;
+            const res = checkWin(test);
             if (res && res.winner === YELLOW) {
-              applyDropToken(c, YELLOW, false);
+              handleDropToken(c);
               return;
             }
           }
         }
 
-        // 2. Immediate Block Check (Depth 1 Instant Saver)
-        for (let c of [3, 2, 4, 1, 5, 0, 6]) {
-          const r = getNextOpenRow(curBoard, c);
+        // 2. Block Opponent Win
+        for (let c of validCols) {
+          let r = -1;
+          for (let row = ROWS - 1; row >= 0; row--) {
+            if (curBoard[row][c] === EMPTY) { r = row; break; }
+          }
           if (r !== -1) {
-            curBoard[r][c] = RED;
-            const res = checkWin(curBoard);
-            curBoard[r][c] = EMPTY;
+            const test = curBoard.map(row => [...row]);
+            test[r][c] = RED;
+            const res = checkWin(test);
             if (res && res.winner === RED) {
-              applyDropToken(c, YELLOW, false);
+              handleDropToken(c);
               return;
             }
           }
         }
 
-        // 3. Deep Minimax Lookahead (Depth 5 for Master Tactical Play)
-        const boardCopy = curBoard.map(row => [...row]);
-        const bestMove = minimax(boardCopy, 5, -Infinity, Infinity, true);
-
-        if (bestMove && bestMove.col !== null && curBoard[0][bestMove.col] === EMPTY) {
-          applyDropToken(bestMove.col, YELLOW, false);
-        } else {
-          // Fallback to center preference
-          const valid = getValidLocations(curBoard);
-          if (valid.length > 0) {
-            applyDropToken(valid[0], YELLOW, false);
-          }
+        // 3. Center Column Priority
+        if (validCols.includes(3)) {
+          handleDropToken(3);
+          return;
         }
-      }, 300);
+
+        // 4. Random from remaining
+        const randomCol = validCols[Math.floor(Math.random() * validCols.length)];
+        handleDropToken(randomCol);
+      }, 350);
 
       return () => {
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
       };
     }
-  }, [currentPlayer, gameMode, winner, applyDropToken]);
+  }, [currentPlayer, gameMode, winner]);
 
-  const isMyTurn = gameMode === 'LOCAL_2P' || (gameMode === 'ONLINE_QR' ? currentPlayer === myRole : currentPlayer === RED);
+  // Active Turn Countdown Timer & Timeout Forfeit Handler
+  useEffect(() => {
+    if (winner || turnTimeLimit <= 0) return;
+
+    setTimeLeft(turnTimeLimit);
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Handle Timeout
+          if (isOnline) {
+            const myTurnNow = (currentPlayer === myRole);
+            if (myTurnNow) {
+              setWinner(myRole === RED ? YELLOW : RED);
+              setResultModal({
+                isOpen: true,
+                outcome: 'LOSS',
+                ratingDelta: -16,
+                xpGained: 10,
+                reason: 'Turn time expired'
+              });
+            } else {
+              setWinner(myRole);
+              setResultModal({
+                isOpen: true,
+                outcome: 'WIN',
+                ratingDelta: 16,
+                xpGained: 30,
+                reason: 'Opponent ran out of time'
+              });
+            }
+          } else if (gameMode === 'VS_COMPUTER') {
+            if (currentPlayer === RED) {
+              setWinner(YELLOW);
+              setResultModal({
+                isOpen: true,
+                outcome: 'LOSS',
+                ratingDelta: -10,
+                xpGained: 10
+              });
+            }
+          } else if (gameMode === 'LOCAL_2P') {
+            setWinner(currentPlayer === RED ? YELLOW : RED);
+          }
+          return 0;
+        }
+
+        // Warning tick on last 5 seconds
+        if (prev <= 5) {
+          try { soundSynth.playRotate(); } catch (e) {}
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentPlayer, winner, turnTimeLimit, isOnline, gameMode, myRole]);
+
+  const isMyTurn = isOnline ? (currentPlayer === myRole) : (gameMode === 'LOCAL_2P' || currentPlayer === RED);
+
 
   return (
     <div style={{
       width: '100%',
-      maxWidth: 'min(480px, calc(100dvh - 125px), 100vw)',
+      maxWidth: 'min(420px, calc(100dvh - 120px), 100vw)',
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
@@ -654,7 +581,7 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
       boxSizing: 'border-box',
       overflow: 'hidden'
     }}>
-      {/* Focused Match Controls: Mobile Adaptive Header */}
+      {/* Top Status Header */}
       <div style={{
         width: '100%',
         display: 'flex',
@@ -664,7 +591,6 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
         flexWrap: 'nowrap',
         gap: '6px'
       }}>
-        {/* Active Mode Pill */}
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -678,48 +604,105 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
           fontWeight: '800',
           color: '#0f172a'
         }}>
-          {gameMode === 'VS_COMPUTER' ? (
+          {isOnline ? (
+            <>
+              <Wifi size={15} color="#16a34a" />
+              <span>ONLINE MATCH</span>
+            </>
+          ) : gameMode === 'VS_COMPUTER' ? (
             <>
               <Bot size={15} color="#0f172a" />
               <span>VS SMART AI</span>
             </>
-          ) : gameMode === 'LOCAL_2P' ? (
+          ) : (
             <>
               <User size={15} color="#0f172a" />
               <span>2P LOCAL</span>
             </>
-          ) : (
-            <>
-              <Wifi size={15} color={isConnected ? '#16a34a' : '#d97706'} />
-              <span>ONLINE {isConnected ? '(CONNECTED)' : '(WAITING)'}</span>
-            </>
           )}
         </div>
 
-        {/* Action Tools */}
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {gameMode === 'ONLINE_QR' && (
-            <button
-              className="btn-secondary"
-              onClick={() => setIsQrModalOpen(true)}
-              style={{ padding: '6px 10px', borderRadius: '8px', fontSize: '11px', color: '#1e3a8a', minHeight: '36px' }}
-            >
-              <QrCode size={13} />
-              <span>QR</span>
-            </button>
-          )}
-
+        {!isOnline && (
           <button
             className="btn-secondary"
-            onClick={() => resetGame(true)}
+            onClick={resetGame}
             title="Reset Board"
             style={{ padding: '6px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', minHeight: '36px' }}
           >
             <RotateCcw size={13} />
             <span>RESET</span>
           </button>
-        </div>
+        )}
+
+        {isOnline && (
+          <LiveEmojiReactionSystem
+            matchId={onlineSession?.matchId}
+            isOnline={isOnline}
+            playerName={profile?.name}
+          />
+        )}
       </div>
+
+
+      {/* Disconnect Alert Banner (30s Grace Period) */}
+      {connectionStatus === 'OPPONENT_DISCONNECTED' && (
+        <div style={{
+          width: '100%', background: '#fffbeb', border: '1.5px solid #f59e0b',
+          borderRadius: '12px', padding: '8px 14px', marginBottom: '8px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          color: '#92400e', fontSize: '12px', fontWeight: '800'
+        }}>
+          <span>📡 Opponent temporary connection drop • Waiting {disconnectCountdown || 30}s for reconnect...</span>
+          <button
+            onClick={() => {
+              setWinner(myRoleRef.current);
+              setResultModal({
+                isOpen: true,
+                outcome: 'WIN',
+                ratingDelta: 16,
+                xpGained: 30
+              });
+            }}
+            style={{ background: '#f59e0b', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}
+          >
+            Claim Win
+          </button>
+        </div>
+      )}
+
+
+      {/* Dynamic Turn Alert Banner */}
+      {!winner && isOnline && (
+        <div style={{
+          width: '100%',
+          padding: '8px 12px',
+          borderRadius: '12px',
+          marginBottom: '6px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          fontSize: '12px',
+          fontWeight: '900',
+          fontFamily: 'var(--font-heading)',
+          letterSpacing: '0.04em',
+          background: isMyTurn ? '#eff6ff' : '#f8fafc',
+          border: isMyTurn ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+          color: isMyTurn ? '#1e3a8a' : '#64748b',
+          boxShadow: isMyTurn ? '0 4px 12px rgba(37, 99, 235, 0.2)' : 'none'
+        }}>
+          <span style={{
+            width: '8px', height: '8px', borderRadius: '50%',
+            background: isMyTurn ? (myRole === RED ? '#ef4444' : '#eab308') : '#94a3b8',
+            display: 'inline-block'
+          }} />
+          <span>
+            {isMyTurn 
+              ? `YOUR TURN (${myRole === RED ? 'RED' : 'YELLOW'}) — DROP A DISC` 
+              : `WAITING FOR OPPONENT (${myRole === RED ? 'YELLOW' : 'RED'}) TO MOVE...`}
+          </span>
+        </div>
+      )}
 
       {/* Dual Player Bar */}
       <MatchPlayerBar
@@ -727,15 +710,15 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
         p1AvatarId={profile?.avatarId || '1'}
         p1Rating={profile?.rating || 1200}
         p1Score={scores.red}
-        p1Symbol="RED"
-        p1Color="#991b1b"
-        p2Name={gameMode === 'VS_COMPUTER' ? 'Smart AI' : (gameMode === 'ONLINE_QR' ? 'Player 2' : 'Player 2')}
-        p2AvatarId="2"
-        p2Rating={1200}
+        p1Symbol="RED DISC"
+        p1Color="#ef4444"
+        p2Name={isOnline ? (opponentProfile?.name || 'Opponent') : (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2')}
+        p2AvatarId={isOnline ? (opponentProfile?.avatarId || '2') : '2'}
+        p2Rating={isOnline ? (opponentProfile?.rating || 1200) : 1200}
         p2Score={scores.yellow}
-        p2Symbol="YELLOW"
-        p2Color="#92400e"
-        isP1Turn={currentPlayer === RED}
+        p2Symbol="YELLOW DISC"
+        p2Color="#eab308"
+        isP1Turn={isMyTurn}
         isGameOver={!!winner}
         gameMode={gameMode}
         winnerText={
@@ -746,43 +729,20 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
         timeLeft={timeLeft}
       />
 
-      {/* Hover Drop Slot Preview */}
+      {/* Connect 4 Vertical Board */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-        gap: 'clamp(4px, 1.5vw, 8px)',
-        width: '100%',
-        height: '20px',
-        marginBottom: '6px',
-        padding: '0 clamp(8px, 2vw, 14px)',
-        boxSizing: 'border-box'
-      }}>
-        {Array.from({ length: COLS }).map((_, c) => {
-          const isHovered = hoveredCol === c && board[0][c] === EMPTY && !winner && isMyTurn && !isAiThinking;
-          return (
-            <div key={`h-${c}`} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              {isHovered && (
-                <div style={{
-                  width: '14px', height: '14px', borderRadius: '50%',
-                  background: currentPlayer === RED ? '#991b1b' : '#d97706',
-                  boxShadow: `0 0 8px ${currentPlayer === RED ? '#991b1b' : '#d97706'}`
-                }} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 100% Fluid Mobile Connect 4 Board */}
-      <div style={{
+        position: 'relative',
         background: '#1e3a8a',
-        padding: 'clamp(8px, 2.5vw, 16px)',
-        borderRadius: '18px',
-        boxShadow: '0 12px 32px rgba(30, 58, 138, 0.22)',
+        padding: 'clamp(8px, 2vw, 14px)',
+        borderRadius: '20px',
+        border: '3px solid #172554',
+        boxShadow: '0 20px 35px -5px rgba(30, 58, 138, 0.45)',
+        width: '100%',
+        aspectRatio: '7 / 6',
         display: 'grid',
         gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-        gap: 'clamp(4px, 1.5vw, 8px)',
-        width: '100%',
+        gridTemplateRows: `repeat(${ROWS}, 1fr)`,
+        gap: 'clamp(4px, 1.2vw, 8px)',
         boxSizing: 'border-box'
       }}>
         {board.map((row, r) =>
@@ -792,60 +752,78 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
             return (
               <div
                 key={`${r}-${c}`}
-                onClick={() => handleColumnClick(c)}
+                onClick={() => handleClickCol(c)}
                 onMouseEnter={() => setHoveredCol(c)}
                 onMouseLeave={() => setHoveredCol(null)}
                 style={{
                   width: '100%',
-                  aspectRatio: '1 / 1',
+                  height: '100%',
+                  background: '#0f172a',
                   borderRadius: '50%',
-                  background: cell === RED ? '#991b1b' : cell === YELLOW ? '#d97706' : '#ffffff',
-                  boxShadow: isWinningCell
-                    ? '0 0 20px #ffffff, inset 0 0 8px rgba(0,0,0,0.3)'
-                    : cell !== EMPTY
-                      ? 'inset 0 -2px 5px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15)'
-                      : 'inset 0 2px 5px rgba(0,0,0,0.25)',
-                  border: isWinningCell ? '3px solid #ffffff' : 'none',
-                  cursor: board[0][c] === EMPTY && !winner && isMyTurn && !isAiThinking ? 'pointer' : 'default',
-                  transform: isWinningCell ? 'scale(1.08)' : 'scale(1)',
-                  transition: 'transform 0.15s ease',
-                  touchAction: 'manipulation'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: isMyTurn && !winner && !isAiThinking && !isSubmittingMove ? 'pointer' : 'default',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: 'inset 0 4px 8px rgba(0,0,0,0.6)'
                 }}
-              />
+              >
+                {cell === RED && (
+                  <div
+                    className="animate-pop-in"
+                    style={{
+                      width: '90%', height: '90%', borderRadius: '50%',
+                      background: 'radial-gradient(circle at 35% 35%, #f87171, #dc2626 60%, #991b1b)',
+                      boxShadow: isWinningCell ? '0 0 20px #ef4444, inset 0 2px 4px rgba(255,255,255,0.4)' : 'inset 0 2px 4px rgba(255,255,255,0.4)',
+                      border: isWinningCell ? '2px solid #ffffff' : 'none',
+                      transform: isWinningCell ? 'scale(1.08)' : 'scale(1)'
+                    }}
+                  />
+                )}
+                {cell === YELLOW && (
+                  <div
+                    className="animate-pop-in"
+                    style={{
+                      width: '90%', height: '90%', borderRadius: '50%',
+                      background: 'radial-gradient(circle at 35% 35%, #fde047, #eab308 60%, #a16207)',
+                      boxShadow: isWinningCell ? '0 0 20px #eab308, inset 0 2px 4px rgba(255,255,255,0.4)' : 'inset 0 2px 4px rgba(255,255,255,0.4)',
+                      border: isWinningCell ? '2px solid #ffffff' : 'none',
+                      transform: isWinningCell ? 'scale(1.08)' : 'scale(1)'
+                    }}
+                  />
+                )}
+              </div>
             );
           })
         )}
       </div>
 
-      {/* Standard QR Modal */}
-      <StandardQrModal
-        isOpen={isQrModalOpen}
-        onClose={() => setIsQrModalOpen(false)}
-        shareUrl={shareUrl}
-        isConnected={isConnected}
-        gameTitle="CONNECT 4"
-      />
+      {/* In-Game Live Reaction Toolbar (With Cooldown & Center Floating Animation) */}
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+        <LiveEmojiReactionSystem
+          matchId={onlineSession?.matchId}
+          isOnline={isOnline}
+          playerName={profile?.name || 'You'}
+          incomingReaction={incomingReaction}
+        />
+      </div>
 
-      {/* Match Lobby Ready Modal (Synchronized START for both players) */}
-      <MatchLobbyReadyModal
-        isOpen={isLobbyReady}
-        gameTitle="CONNECT 4"
-        myProfile={profile}
-        opponentProfile={opponentProfile}
-        settings={settings}
-        onStartMatch={() => handleStartMatch(true)}
-      />
 
-      {/* Post-Match Victory / Defeat / Draw Result Modal */}
+      {/* Result Modal */}
       <MatchResultModal
         isOpen={resultModal.isOpen}
         onClose={() => {
           setResultModal(prev => ({ ...prev, isOpen: false }));
-          resetGame(true);
+          if (isOnline) {
+            if (onGoHome) onGoHome();
+          } else {
+            resetGame();
+          }
         }}
         outcome={resultModal.outcome}
-        gameTitle="Connect 4 (7×6)"
-        opponentName={gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent'}
+        gameTitle="Connect Four (7×6)"
+        opponentName={isOnline ? (opponentProfile?.name || 'Opponent') : (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2')}
         ratingDelta={resultModal.ratingDelta}
         xpGained={resultModal.xpGained}
         currentRating={profile?.rating || 1200}
@@ -854,14 +832,21 @@ export default function ConnectFour({ profile, initialMode = 'VS_COMPUTER', sett
         movesCount={history.length}
         onRematch={() => {
           setResultModal(prev => ({ ...prev, isOpen: false }));
-          resetGame(true);
+          if (isOnline) {
+            if (onGoHome) onGoHome();
+          } else {
+            resetGame();
+          }
         }}
         onGoHome={() => {
           setResultModal(prev => ({ ...prev, isOpen: false }));
-          resetGame(true);
-          onGoHome();
+          if (onGoHome) onGoHome();
         }}
       />
     </div>
   );
+
+  function handleClickCol(colIdx) {
+    handleDropToken(colIdx);
+  }
 }

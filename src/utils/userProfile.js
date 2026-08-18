@@ -35,42 +35,74 @@ export function getUserProfile() {
   try {
     const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
     const parsed = securityEngine.safeJsonParse(raw, null);
-    if (!parsed || !parsed.isRegistered) return null;
+    
+    if (parsed) {
+      const { sanitizedName } = securityEngine.validatePlayerName(parsed.name || 'Player');
 
-    const { sanitizedName } = securityEngine.validatePlayerName(parsed.name || 'Player');
+      const gameStats = {
+        gomoku: { ...DEFAULT_GAME_STATS.gomoku, ...(parsed.gameStats?.gomoku || {}) },
+        connect4: { ...DEFAULT_GAME_STATS.connect4, ...(parsed.gameStats?.connect4 || {}) },
+        tictactoe: { ...DEFAULT_GAME_STATS.tictactoe, ...(parsed.gameStats?.tictactoe || {}) }
+      };
 
-    // Anti-DevTools Tampering: Verify signature if present
-    if (parsed._sig) {
-      const isValid = securityEngine.verifySignature(parsed, parsed._sig);
-      if (!isValid) {
-        console.warn('⚠️ Security Alert: LocalStorage profile signature mismatch. Tampering detected & sanitized.');
-      }
+      return {
+        id: securityEngine.sanitizeText(parsed.id || 'user_' + generateUUID().substring(0, 8), 36),
+        name: sanitizedName,
+        gamertag: parsed.gamertag || null,
+        avatarId: ['1', '2', '3', '4', '5', '6', '7', '8'].includes(parsed.avatarId) ? parsed.avatarId : '1',
+        level: Math.max(1, Math.min(100, Number(parsed.level) || 1)),
+        xp: Math.max(0, Math.min(100000, Number(parsed.xp) || 0)),
+        rating: Math.max(100, Math.min(3000, Number(parsed.rating) || 1200)),
+        wins: Math.max(0, Number(parsed.wins) || 0),
+        losses: Math.max(0, Number(parsed.losses) || 0),
+        draws: Math.max(0, Number(parsed.draws) || 0),
+        isGuest: parsed.isGuest !== false,
+        gameStats,
+        history: Array.isArray(parsed.history) ? parsed.history.slice(0, 20) : [],
+        isRegistered: true
+      };
     }
 
-    const gameStats = {
-      gomoku: { ...DEFAULT_GAME_STATS.gomoku, ...(parsed.gameStats?.gomoku || {}) },
-      connect4: { ...DEFAULT_GAME_STATS.connect4, ...(parsed.gameStats?.connect4 || {}) },
-      tictactoe: { ...DEFAULT_GAME_STATS.tictactoe, ...(parsed.gameStats?.tictactoe || {}) }
-    };
-
-    return {
-      id: securityEngine.sanitizeText(parsed.id || 'user_1', 20),
-      name: sanitizedName,
-      avatarId: ['1', '2', '3', '4', '5', '6', '7', '8'].includes(parsed.avatarId) ? parsed.avatarId : '1',
-      level: Math.max(1, Math.min(100, Number(parsed.level) || 1)),
-      xp: Math.max(0, Math.min(100000, Number(parsed.xp) || 0)),
-      rating: Math.max(100, Math.min(3000, Number(parsed.rating) || 1200)),
-      wins: Math.max(0, Number(parsed.wins) || 0),
-      losses: Math.max(0, Number(parsed.losses) || 0),
-      draws: Math.max(0, Number(parsed.draws) || 0),
-      gameStats,
-      history: Array.isArray(parsed.history) ? parsed.history.slice(0, 20) : [],
+    // Default seamless standard profile
+    const defaultId = 'player_' + generateUUID().substring(0, 8);
+    const defaultProfile = {
+      id: defaultId,
+      name: 'Player',
+      gamertag: null,
+      avatarId: '1',
+      level: 1,
+      xp: 0,
+      rating: 1200,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      isGuest: true,
+      gameStats: { ...DEFAULT_GAME_STATS },
+      history: [],
       isRegistered: true
     };
+    saveUserProfile(defaultProfile);
+    return defaultProfile;
   } catch (e) {
-    return null;
+    return {
+      id: 'player_guest',
+      name: 'Player',
+      gamertag: null,
+      avatarId: '1',
+      level: 1,
+      xp: 0,
+      rating: 1200,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      isGuest: true,
+      gameStats: { ...DEFAULT_GAME_STATS },
+      history: [],
+      isRegistered: true
+    };
   }
 }
+
 
 export function saveUserProfile(updated) {
   try {
@@ -204,3 +236,14 @@ export function recordMatchResult(gameKey, outcome, opponentName = 'Computer') {
     gameXp: profile.gameStats[normalizedKey].xp
   };
 }
+
+export function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+

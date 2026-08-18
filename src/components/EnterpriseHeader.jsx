@@ -1,6 +1,7 @@
-import React from 'react';
-import { ArrowLeft, Volume2, VolumeX, BarChart3, Settings, Trophy, Zap } from 'lucide-react';
-import { AVATARS, getTier } from '../utils/userProfile.js';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Volume2, VolumeX, Zap, Menu } from 'lucide-react';
+import { presenceService } from '../services/presenceService.js';
+import MobileMenuDrawer from './MobileMenuDrawer.jsx';
 
 export const GAME_DETAILS = {
   gomoku: { title: 'GOMOKU', subtitle: '15 × 15 Grid', color: '#0f172a' },
@@ -11,56 +12,64 @@ export const GAME_DETAILS = {
 export default function EnterpriseHeader({
   activeGameId,
   onSelectGame,
-  onOpenStats,
-  onOpenProfile,
-  onOpenSettings,
-  onOpenLeaderboard,
   profile,
   isMuted,
-  onToggleSound
+  onToggleSound,
+  onOpenLeaderboard,
+  onOpenStats,
+  onOpenSettings,
+  onOpenProfile,
+  onJoinPrivateRoom
 }) {
-  const currentAvatar = AVATARS.find(a => a.id === profile?.avatarId) || AVATARS[0];
-  const currentTier = getTier(profile?.rating || 1200);
+  const [onlineCount, setOnlineCount] = useState(() => presenceService.getOnlineCount());
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const unsub = presenceService.subscribe((count) => setOnlineCount(count));
+    return () => unsub();
+  }, []);
 
   const isInsideGame = activeGameId && activeGameId !== 'home';
   const currentGame = isInsideGame ? GAME_DETAILS[activeGameId] : null;
 
   return (
-    <header style={{
-      width: '100%',
-      maxWidth: '1000px',
-      marginBottom: '10px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '6px'
-    }}>
-      {/* Dynamic Header Bar */}
-      <div style={{
+    <>
+      <header style={{
+        width: '100%',
+        maxWidth: '100%',
+        position: 'sticky',
+        top: 0,
+        zIndex: 90,
+        background: 'rgba(248, 250, 252, 0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        padding: '8px 0',
+        marginBottom: isInsideGame ? '6px' : '16px',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        flexWrap: 'nowrap',
-        gap: '6px',
-        width: '100%'
+        justifyContent: 'space-between',
+        gap: '10px',
+        borderBottom: '1px solid rgba(226, 232, 240, 0.8)'
       }}>
-        {/* Left Side: Exit Room Button (Inside Game) OR Brand Hub Logo (On Home) */}
+
+
+        {/* Left Side: Exit Hub (Inside Game) OR Brand Hub Logo (Home) */}
         {isInsideGame ? (
           <button
             onClick={() => onSelectGame('home')}
             className="btn-secondary"
             style={{
-              padding: '6px 10px',
+              padding: '6px 14px',
               borderRadius: '10px',
               fontFamily: 'var(--font-heading)',
               fontSize: '12px',
               fontWeight: '800',
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
+              gap: '6px',
               color: '#0f172a',
               background: '#ffffff',
               border: '1.5px solid #cbd5e1',
-              flexShrink: 0,
               minHeight: '36px'
             }}
           >
@@ -68,142 +77,151 @@ export default function EnterpriseHeader({
             <span>EXIT (HUB)</span>
           </button>
         ) : (
-          <div
-            onClick={() => onSelectGame('home')}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flexShrink: 0 }}
-          >
-            <div style={{
-              width: '32px', height: '32px',
-              borderRadius: '10px',
-              background: '#0f172a',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 4px 10px rgba(15, 23, 42, 0.15)'
-            }}>
-              <Zap size={16} />
-            </div>
-
-            <div>
-              <h1 style={{
-                fontFamily: 'var(--font-heading)',
-                fontSize: 'clamp(14px, 4vw, 17px)',
-                fontWeight: '900',
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Mobile Hamburger Menu Button on Left */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="btn-secondary mobile-menu-btn"
+              title="Open Navigation Menu"
+              style={{
+                width: '36px', height: '36px', padding: 0,
+                borderRadius: '10px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: '#ffffff',
+                borderColor: '#cbd5e1',
                 color: '#0f172a',
-                letterSpacing: '-0.02em',
-                margin: 0,
-                lineHeight: 1.1
+                cursor: 'pointer'
+              }}
+            >
+              <Menu size={18} />
+            </button>
+
+            <div
+              onClick={() => onSelectGame('home')}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+            >
+              <div style={{
+                width: '36px', height: '36px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#ffffff',
+                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)'
               }}>
-                CHAMPIONSHIP
-              </h1>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: '#64748b' }}>
-                Arena 3D
-              </span>
+                <Zap size={18} fill="#ffffff" />
+              </div>
+
+              <div>
+                <h1 style={{
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: 'clamp(16px, 4vw, 19px)',
+                  fontWeight: '900',
+                  color: '#0f172a',
+                  margin: 0,
+                  letterSpacing: '-0.02em',
+                  lineHeight: 1.1
+                }}>
+                  CYBER ARCADE 3D
+                </h1>
+                <p style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  color: '#64748b',
+                  margin: 0,
+                  fontWeight: '600'
+                }}>
+                  Multiplayer Game Arena
+                </p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Center: Active Game Title */}
+
+        {/* Center Game Indicator (Inside Game) */}
         {isInsideGame && currentGame && (
           <div style={{
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '8px',
             background: '#ffffff',
-            padding: '4px 8px',
-            borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            overflow: 'hidden'
+            border: '1.5px solid #e2e8f0',
+            padding: '4px 12px',
+            borderRadius: '20px',
+            boxShadow: 'var(--shadow-xs)'
           }}>
-            <span style={{
-              fontFamily: 'var(--font-heading)',
-              fontSize: '12px',
-              fontWeight: '900',
-              color: currentGame.color,
-              whiteSpace: 'nowrap'
-            }}>
+            <span style={{ fontSize: '12px', fontWeight: '900', color: '#0f172a', fontFamily: 'var(--font-heading)' }}>
               {currentGame.title}
             </span>
           </div>
         )}
 
-        {/* Right Side: Profile Pill & Tools */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-          {/* User Profile Pill */}
-          <button
-            onClick={onOpenProfile}
-            className="card-enterprise"
+        {/* Right Side Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Online count badge */}
+          <div
+            title={`${onlineCount} Players Online Realtime`}
             style={{
-              padding: '3px 7px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              fontWeight: '800',
+              color: '#059669',
+              background: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              padding: '4px 9px',
+              borderRadius: '20px',
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
-              cursor: 'pointer',
-              background: '#ffffff',
-              border: '1.5px solid #cbd5e1',
-              minHeight: '36px'
+              gap: '6px',
+              flexShrink: 0
             }}
           >
-            <div style={{
-              width: '22px', height: '22px', borderRadius: '50%',
-              background: currentAvatar.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#ffffff', fontFamily: 'var(--font-heading)', fontSize: '10px', fontWeight: '900',
-              flexShrink: 0
-            }}>
-              {profile?.name ? profile.name[0].toUpperCase() : 'P'}
-            </div>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: '#10b981',
+              boxShadow: '0 0 8px #10b981'
+            }} />
+            <span>{onlineCount} ONLINE</span>
+          </div>
 
-            <div style={{ textAlign: 'left' }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: '800',
-                color: currentTier.color, background: `${currentTier.color}15`,
-                padding: '1px 3px', borderRadius: '4px'
-              }}>
-                {profile?.rating || 1200}
-              </span>
-            </div>
-          </button>
 
-          {/* Leaderboard Button */}
+          {/* Sound Toggle (Desktop) */}
           <button
-            className="btn-secondary"
-            onClick={onOpenLeaderboard}
-            title="Global Leaderboard (Top 50)"
-            style={{ padding: '6px 8px', minHeight: '36px' }}
-          >
-            <Trophy size={14} color="#d97706" />
-          </button>
-
-          {/* Match Settings Button */}
-          <button
-            className="btn-secondary"
-            onClick={onOpenSettings}
-            title="Match Settings (Turn Time & First Player)"
-            style={{ padding: '6px 8px', minHeight: '36px' }}
-          >
-            <Settings size={14} color="#0f172a" />
-          </button>
-
-          {/* Stats Button */}
-          <button
-            className="btn-secondary"
-            onClick={onOpenStats}
-            title="Career Stats & Records"
-            style={{ padding: '6px 8px', minHeight: '36px' }}
-          >
-            <BarChart3 size={14} color="#475569" />
-          </button>
-
-          {/* Sound Toggle */}
-          <button
-            className="btn-secondary"
             onClick={onToggleSound}
-            title={isMuted ? 'Unmute SFX' : 'Mute SFX'}
-            style={{ padding: '6px 8px', minHeight: '36px' }}
+            className="btn-secondary desktop-sound-btn"
+            title={isMuted ? 'Unmute Sound' : 'Mute Sound'}
+            style={{
+              width: '36px', height: '36px', padding: 0,
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: isMuted ? '#fff1f2' : '#ffffff',
+              borderColor: isMuted ? '#fecdd3' : '#cbd5e1',
+              color: isMuted ? '#e11d48' : '#0f172a'
+            }}
           >
-            {isMuted ? <VolumeX size={14} color="#94a3b8" /> : <Volume2 size={14} color="#0f172a" />}
+            {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
         </div>
-      </div>
-    </header>
+      </header>
+
+
+      {/* Mobile Slide-in Menu Drawer */}
+      <MobileMenuDrawer
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        profile={profile}
+        isMuted={isMuted}
+        onToggleSound={onToggleSound}
+        onOpenLeaderboard={onOpenLeaderboard}
+        onOpenStats={onOpenStats}
+        onOpenSettings={onOpenSettings}
+        onOpenProfile={onOpenProfile}
+        onSelectGame={onSelectGame}
+        onJoinPrivateRoom={onJoinPrivateRoom}
+      />
+    </>
   );
 }
+

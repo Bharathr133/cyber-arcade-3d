@@ -3,18 +3,23 @@ import { ExternalLink, Heart, ShieldCheck, Zap, Globe, Github } from 'lucide-rea
 
 export default function EnterpriseFooter() {
   return (
-    <footer style={{
-      width: '100%',
-      maxWidth: '1000px',
-      marginTop: 'auto',
-      paddingTop: '40px',
-      paddingBottom: '24px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '12px',
-      borderTop: '1px solid #e2e8f0'
-    }}>
+    <footer
+      className="desktop-footer"
+      style={{
+        width: '100%',
+        maxWidth: '100%',
+        marginTop: 'auto',
+        paddingTop: '40px',
+        paddingBottom: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '12px',
+        borderTop: '1px solid #e2e8f0'
+      }}
+    >
+
+
       {/* Top Footer Row */}
       <div style={{
         width: '100%',

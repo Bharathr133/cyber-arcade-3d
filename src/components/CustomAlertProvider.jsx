@@ -112,9 +112,10 @@ export function CustomAlertProvider({ children }) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
-        zIndex: 999999,
+        zIndex: 10000000,
         boxSizing: 'border-box',
         pointerEvents: 'auto',
+
         animation: 'alertFadeIn 0.15s ease-out forwards'
       }}
     >

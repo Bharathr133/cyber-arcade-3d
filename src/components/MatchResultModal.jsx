@@ -80,17 +80,21 @@ export default function MatchResultModal({
       <div
         className="card-enterprise animate-pop-in"
         style={{
-          width: 'min(92vw, 420px)',
-          padding: 'clamp(24px, 5vw, 32px) clamp(18px, 4vw, 28px)',
+          width: 'min(95vw, 420px)',
+          maxHeight: '92dvh',
+          padding: 'clamp(18px, 4vw, 28px) clamp(14px, 3.5vw, 24px)',
           background: '#ffffff',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
           borderRadius: '24px',
           textAlign: 'center',
           position: 'relative',
           boxSizing: 'border-box',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           margin: 'auto'
         }}
       >
+
         {/* Top Right 'X' Close Button */}
         <button
           onClick={onClose}

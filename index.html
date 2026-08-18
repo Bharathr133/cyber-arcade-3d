@@ -1,85 +1,181 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     
     <!-- Primary SEO Meta Tags -->
-    <title>Online Free Games — 2-Player Multiplayer Gomoku, Connect 4 & Tic-Tac-Toe</title>
-    <meta name="title" content="Online Free Games — 2-Player Multiplayer Gomoku, Connect 4 & Tic-Tac-Toe" />
-    <meta name="description" content="Play free online 2-player multiplayer games: Gomoku (15×15), Connect Four (7×6), and Tic-Tac-Toe with instant QR code matchmaking, blitz turn timers, and live Supabase Grandmaster leaderboards." />
-    <meta name="keywords" content="online free games, gomoku online, connect four multiplayer, tic tac toe 2 player, free web games, p2p online games, webrtc games, turn timer blitz games, bharath r developer" />
+    <title>Online Free Games — Play 2-Player Multiplayer Connect 4, Tic-Tac-Toe & Gomoku Free</title>
+    <meta name="title" content="Online Free Games — Play 2-Player Multiplayer Connect 4, Tic-Tac-Toe & Gomoku Free" />
+    <meta name="description" content="Play free online 2-player strategy board games: Connect 4 (7×6), Tic-Tac-Toe (3×3 Blitz), and Gomoku (15×15 Five in a Row). Features real-time multiplayer, private 6-letter room codes, intelligent AI bots, and live Supabase Grandmaster Leaderboards. No install required." />
+    <meta name="keywords" content="online free games, play connect 4 online, free multiplayer board games, tic tac toe 2 player, gomoku 15x15 online, five in a row free, play games with friends online, browser games no download, 2 player games unblocked, p2p multiplayer games, supabase game leaderboard, bharath r developer" />
     <meta name="author" content="Bharath R" />
+    <meta name="creator" content="Bharath R" />
+    <meta name="publisher" content="Bharath R" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <meta name="theme-color" content="#0b1329" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="rating" content="general" />
+    <meta name="distribution" content="global" />
+    <meta name="revisit-after" content="1 days" />
+
+    <!-- Web App & Mobile Optimization -->
     <meta name="application-name" content="Online Free Games" />
     <meta name="apple-mobile-web-app-title" content="Free Games" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
 
     <!-- Google Search Console Verification -->
     <meta name="google-site-verification" content="google8e715967ad7dfb94" />
 
     <!-- Canonical URL -->
     <link rel="canonical" href="https://onlinefreegames.vercel.app/" />
+    <link rel="alternate" hreflang="x-default" href="https://onlinefreegames.vercel.app/" />
+    <link rel="alternate" hreflang="en" href="https://onlinefreegames.vercel.app/" />
 
     <!-- Favicon & Web App Icons -->
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Open Graph / Facebook / LinkedIn / Discord / WhatsApp Previews -->
+    <!-- Open Graph / Facebook / Discord / WhatsApp / LinkedIn -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://onlinefreegames.vercel.app/" />
     <meta property="og:site_name" content="Online Free Games" />
-    <meta property="og:title" content="Online Free Games — 2-Player Strategy Games Online" />
-    <meta property="og:description" content="Play free instant 2-player P2P WebRTC board games: Gomoku, Connect 4, and Tic-Tac-Toe with QR Code matchmaking, blitz turn timers, and real-time Global Grandmaster leaderboards." />
+    <meta property="og:title" content="Online Free Games — Play 2-Player Connect 4, Tic-Tac-Toe & Gomoku Online" />
+    <meta property="og:description" content="Instant 2-player multiplayer strategy board games: Connect 4, Tic-Tac-Toe, and Gomoku. Play vs smart AI or battle friends with 6-letter room codes and live ratings." />
     <meta property="og:image" content="https://onlinefreegames.vercel.app/icon.svg" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Online Free Games Logo" />
     <meta property="og:locale" content="en_US" />
 
-    <!-- Twitter Card Data -->
+    <!-- Twitter / X Card Data -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://onlinefreegames.vercel.app/" />
     <meta name="twitter:title" content="Online Free Games — 2-Player Multiplayer Strategy Games" />
-    <meta name="twitter:description" content="Play Gomoku, Connect 4, and Tic-Tac-Toe free with instant QR matchmaking and live global ratings." />
+    <meta name="twitter:description" content="Play free Gomoku, Connect 4, and Tic-Tac-Toe with instant matchmaking, private room codes, and live global rankings." />
     <meta name="twitter:image" content="https://onlinefreegames.vercel.app/icon.svg" />
     <meta name="twitter:creator" content="@Bharathr133" />
 
-    <!-- Structured Data (Schema.org JSON-LD for Google Rich Results) -->
+    <!-- Structured Data: Multi-Entity JSON-LD Graph for Google Search Rich Snippets -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "Online Free Games",
-      "applicationCategory": "GameApplication",
-      "operatingSystem": "Web, iOS, Android, Windows, macOS, Linux",
-      "url": "https://onlinefreegames.vercel.app/",
-      "author": {
-        "@type": "Person",
-        "name": "Bharath R",
-        "url": "https://bharathr.vercel.app/"
-      },
-      "description": "Free competitive online multiplayer strategy game platform featuring real-time Gomoku, Connect Four, and Tic-Tac-Toe with P2P WebRTC, QR code invites, and live cloud leaderboards.",
-      "genre": ["Board Game", "Strategy Game", "Multiplayer Game", "Free Games"],
-      "inLanguage": "en",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      }
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://onlinefreegames.vercel.app/#website",
+          "url": "https://onlinefreegames.vercel.app/",
+          "name": "Online Free Games",
+          "description": "Free instant 2-player multiplayer strategy games featuring Connect 4, Tic-Tac-Toe, and Gomoku.",
+          "inLanguage": "en",
+          "publisher": {
+            "@id": "https://onlinefreegames.vercel.app/#author"
+          }
+        },
+        {
+          "@type": "Person",
+          "@id": "https://onlinefreegames.vercel.app/#author",
+          "name": "Bharath R",
+          "url": "https://bharathr.vercel.app/",
+          "jobTitle": "Full Stack Software Engineer",
+          "sameAs": [
+            "https://bharathr.vercel.app/"
+          ]
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://onlinefreegames.vercel.app/#webapp",
+          "url": "https://onlinefreegames.vercel.app/",
+          "name": "Online Free Games Hub",
+          "applicationCategory": "GameApplication",
+          "operatingSystem": "All modern browsers (Chrome, Safari, Firefox, Edge, iOS, Android)",
+          "browserRequirements": "Requires JavaScript. Requires HTML5 Canvas & WebSockets.",
+          "author": {
+            "@id": "https://onlinefreegames.vercel.app/#author"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "featureList": [
+            "Real-time 2-player multiplayer matchmaking",
+            "Private 6-letter room invites",
+            "Smart AI computer difficulty",
+            "Supabase cloud-synced global Grandmaster leaderboards",
+            "Interactive live emoji reactions",
+            "Accidental match exit protection"
+          ]
+        },
+        {
+          "@type": "VideoGame",
+          "name": "Connect Four Online",
+          "url": "https://onlinefreegames.vercel.app/",
+          "gamePlatform": ["Web Browser", "Mobile Browser"],
+          "applicationCategory": "GameApplication",
+          "genre": ["Strategy", "Board Game", "Multiplayer"],
+          "playMode": ["SinglePlayer", "MultiPlayer", "CoOp"],
+          "numberOfPlayers": {
+            "@type": "QuantitativeValue",
+            "minValue": 1,
+            "maxValue": 2
+          }
+        },
+        {
+          "@type": "VideoGame",
+          "name": "Tic-Tac-Toe Blitz",
+          "url": "https://onlinefreegames.vercel.app/",
+          "gamePlatform": ["Web Browser", "Mobile Browser"],
+          "applicationCategory": "GameApplication",
+          "genre": ["Strategy", "Board Game", "Multiplayer", "Blitz"],
+          "playMode": ["SinglePlayer", "MultiPlayer", "CoOp"],
+          "numberOfPlayers": {
+            "@type": "QuantitativeValue",
+            "minValue": 1,
+            "maxValue": 2
+          }
+        },
+        {
+          "@type": "VideoGame",
+          "name": "Gomoku Five in a Row",
+          "url": "https://onlinefreegames.vercel.app/",
+          "gamePlatform": ["Web Browser", "Mobile Browser"],
+          "applicationCategory": "GameApplication",
+          "genre": ["Strategy", "Board Game", "Multiplayer", "Gomoku"],
+          "playMode": ["SinglePlayer", "MultiPlayer", "CoOp"],
+          "numberOfPlayers": {
+            "@type": "QuantitativeValue",
+            "minValue": 1,
+            "maxValue": 2
+          }
+        }
+      ]
     }
     </script>
 
-    <!-- Preconnect to Google Fonts -->
+    <!-- Preconnect & Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800;900&display=swap" rel="stylesheet" />
     
     <!-- Security Headers -->
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
   </head>
   <body>
+    <noscript>
+      <div style="padding: 24px; text-align: center; background: #0b1329; color: #ffffff; font-family: sans-serif;">
+        <h2>JavaScript Required</h2>
+        <p>Online Free Games requires JavaScript enabled to play Connect 4, Tic-Tac-Toe, and Gomoku online.</p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

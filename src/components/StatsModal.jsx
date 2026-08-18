@@ -76,9 +76,9 @@ export default function StatsModal({
       <div
         className="card-enterprise animate-pop-in"
         style={{
-          width: 'min(92vw, 480px)',
-          maxHeight: '90vh',
-          padding: 'clamp(20px, 5vw, 28px)',
+          width: 'min(95vw, 480px)',
+          maxHeight: '90dvh',
+          padding: 'clamp(14px, 4vw, 24px)',
           background: '#ffffff',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
           borderRadius: '24px',
@@ -86,10 +86,12 @@ export default function StatsModal({
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'auto',
+          overflowX: 'hidden',
           boxSizing: 'border-box',
           margin: 'auto'
         }}
       >
+
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -218,26 +220,27 @@ export default function StatsModal({
           })}
         </div>
 
-        {/* Reset Stats Button */}
-        <button
-          onClick={onResetStats}
-          className="btn-secondary"
-          style={{
-            padding: '9px',
-            borderRadius: '10px',
-            fontSize: '11px',
-            fontWeight: '700',
-            color: '#991b1b',
-            borderColor: '#fecaca',
-            minHeight: '38px'
-          }}
-        >
-          <RotateCcw size={13} />
-          <span>RESET CAREER STATS</span>
-        </button>
+        {/* Official Career Verification Footer */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          padding: '8px',
+          background: '#f8fafc',
+          borderRadius: '10px',
+          border: '1px solid #e2e8f0',
+          fontSize: '11px',
+          color: '#64748b',
+          fontFamily: 'var(--font-mono)'
+        }}>
+          <Award size={13} color="#0f172a" />
+          <span>Official Competitive Record • Verified ELO & History</span>
+        </div>
       </div>
     </div>
   );
 
   return createPortal(modalContent, document.body);
 }
+
