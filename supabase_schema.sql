@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS name TEXT DEFAULT 'Player';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS display_name TEXT DEFAULT 'Player';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_id TEXT DEFAULT '1';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT '1';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 1200;
@@ -52,6 +53,9 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS xp INTEGER DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS wins INTEGER DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS losses INTEGER DEFAULT 0;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS draws INTEGER DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS ban_reason TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'player';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ONLINE';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
@@ -60,6 +64,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFA
 -- Drop NOT NULL constraints if they were set on legacy columns
 ALTER TABLE public.profiles ALTER COLUMN name DROP NOT NULL;
 ALTER TABLE public.profiles ALTER COLUMN display_name DROP NOT NULL;
+
 
 
 
@@ -124,13 +129,28 @@ CREATE TABLE IF NOT EXISTS public.matches (
   game_slug TEXT NOT NULL,
   room_id UUID REFERENCES public.game_rooms(id) ON DELETE SET NULL,
   player_1_id TEXT NOT NULL,
+  player_1_name TEXT,
   player_2_id TEXT NOT NULL,
+  player_2_name TEXT,
   result TEXT DEFAULT 'ACTIVE',
   winner_id TEXT,
+  winner_name TEXT,
   duration_seconds INTEGER DEFAULT 0,
   started_at TIMESTAMPTZ DEFAULT NOW(),
-  ended_at TIMESTAMPTZ
+  ended_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS player_1_name TEXT;
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS player_2_name TEXT;
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS winner_name TEXT;
+ALTER TABLE public.matches ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.game_rooms ADD COLUMN IF NOT EXISTS game_key TEXT;
+ALTER TABLE public.game_rooms ADD COLUMN IF NOT EXISTS player_1_name TEXT;
+ALTER TABLE public.game_rooms ADD COLUMN IF NOT EXISTS player_2_name TEXT;
+ALTER TABLE public.game_rooms ADD COLUMN IF NOT EXISTS is_waiting BOOLEAN DEFAULT TRUE;
+
 
 -- 6. GAME STATES TABLE (Authoritative Real-Time Game Board & Turns)
 CREATE TABLE IF NOT EXISTS public.game_states (
@@ -155,6 +175,16 @@ CREATE TABLE IF NOT EXISTS public.game_moves (
   client_move_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 8. SYSTEM ANNOUNCEMENTS TABLE (Global Real-Time Broadcasts)
+CREATE TABLE IF NOT EXISTS public.system_announcements (
+  id TEXT PRIMARY KEY DEFAULT 'global_broadcast',
+  message TEXT NOT NULL DEFAULT '',
+  type TEXT NOT NULL DEFAULT 'info',
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 
 
 -- 8. PERFORMANCE INDEXES
@@ -220,6 +250,15 @@ DROP POLICY IF EXISTS "Public Insert Game Moves" ON public.game_moves;
 CREATE POLICY "Public Read Game Moves" ON public.game_moves FOR SELECT USING (true);
 CREATE POLICY "Public Insert Game Moves" ON public.game_moves FOR INSERT WITH CHECK (true);
 
+ALTER TABLE public.system_announcements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public Read System Announcements" ON public.system_announcements;
+DROP POLICY IF EXISTS "Public Insert System Announcements" ON public.system_announcements;
+DROP POLICY IF EXISTS "Public Update System Announcements" ON public.system_announcements;
+CREATE POLICY "Public Read System Announcements" ON public.system_announcements FOR SELECT USING (true);
+CREATE POLICY "Public Insert System Announcements" ON public.system_announcements FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update System Announcements" ON public.system_announcements FOR UPDATE USING (true);
+
+
 -- 11. GRANT PERMISSIONS TO ANON & AUTHENTICATED ROLES
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
@@ -251,6 +290,8 @@ DECLARE
   v_room_code TEXT;
   v_room_row RECORD;
 BEGIN
+  v_user_id := COALESCE(p_user_id, 'player_' || substring(gen_random_uuid()::text from 1 for 8));
+
   -- Only update profile if this user has an existing saved/claimed profile (DO NOT insert for guests!)
   IF EXISTS (SELECT 1 FROM public.profiles WHERE id = v_user_id) THEN
     UPDATE public.profiles
@@ -262,6 +303,7 @@ BEGIN
         last_seen = NOW()
     WHERE id = v_user_id;
   END IF;
+
 
   v_room_code := upper(substring(replace(gen_random_uuid()::text, '-', '') from 1 for 6));
 
@@ -782,7 +824,212 @@ END;
 $$;
 
 
--- 13. REALTIME PUBLICATION CONFIGURATION
+-- 13. AUTH.USERS AUTO-PROVISIONING TRIGGER
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (
+    id,
+    username,
+    display_name,
+    avatar_url,
+    rating,
+    level,
+    xp,
+    wins,
+    losses,
+    draws,
+    status,
+    last_seen,
+    created_at,
+    updated_at
+  ) VALUES (
+    new.id::text,
+    COALESCE(new.raw_user_meta_data->>'gamertag', split_part(new.email, '@', 1)),
+    COALESCE(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)),
+    COALESCE(new.raw_user_meta_data->>'avatar_id', '1'),
+    1200,
+    1,
+    0,
+    0,
+    0,
+    0,
+    'ONLINE',
+    NOW(),
+    NOW(),
+    NOW()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    username = EXCLUDED.username,
+    display_name = EXCLUDED.display_name,
+    avatar_url = EXCLUDED.avatar_url,
+    last_seen = NOW(),
+    updated_at = NOW();
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop and recreate trigger on auth.users (if permissions allow in Supabase SQL editor)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'auth' AND tablename = 'users') THEN
+    DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+    CREATE TRIGGER on_auth_user_created
+      AFTER INSERT ON auth.users
+      FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- 14. AUTHORITATIVE MATCH RESULT & ATOMIC ELO CALCULATION RPC
+CREATE OR REPLACE FUNCTION public.rpc_record_match_result(
+  p_user_id TEXT,
+  p_game_key TEXT,
+  p_outcome TEXT,
+  p_opponent_name TEXT DEFAULT 'Computer'
+)
+RETURNS JSON AS $$
+DECLARE
+  v_rating_delta INT := 0;
+  v_xp_gain INT := 10;
+  v_profile RECORD;
+  v_game_stat RECORD;
+  v_new_rating INT;
+  v_new_level INT;
+  v_new_xp INT;
+  v_xp_for_next INT;
+BEGIN
+  -- Determine rating and XP gains
+  IF p_outcome = 'WIN' THEN
+    v_rating_delta := 25;
+    v_xp_gain := 50;
+  ELSIF p_outcome = 'LOSS' THEN
+    v_rating_delta := -10;
+    v_xp_gain := 10;
+  ELSE
+    v_rating_delta := 2;
+    v_xp_gain := 15;
+  END IF;
+
+  -- 1. Update or Insert Global Profile
+  INSERT INTO public.profiles (id, display_name, rating, level, xp, wins, losses, draws, last_seen)
+  VALUES (
+    p_user_id,
+    'Player',
+    1200 + v_rating_delta,
+    1,
+    v_xp_gain,
+    CASE WHEN p_outcome = 'WIN' THEN 1 ELSE 0 END,
+    CASE WHEN p_outcome = 'LOSS' THEN 1 ELSE 0 END,
+    CASE WHEN p_outcome = 'DRAW' THEN 1 ELSE 0 END,
+    NOW()
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    rating = GREATEST(100, LEAST(3000, public.profiles.rating + v_rating_delta)),
+    xp = public.profiles.xp + v_xp_gain,
+    wins = public.profiles.wins + (CASE WHEN p_outcome = 'WIN' THEN 1 ELSE 0 END),
+    losses = public.profiles.losses + (CASE WHEN p_outcome = 'LOSS' THEN 1 ELSE 0 END),
+    draws = public.profiles.draws + (CASE WHEN p_outcome = 'DRAW' THEN 1 ELSE 0 END),
+    last_seen = NOW(),
+    updated_at = NOW();
+
+  -- 2. Update Per-Game Stats
+  INSERT INTO public.game_stats (user_id, game_key, rating, level, xp, wins, losses, draws, updated_at)
+  VALUES (
+    p_user_id,
+    p_game_key,
+    1200 + v_rating_delta,
+    1,
+    v_xp_gain,
+    CASE WHEN p_outcome = 'WIN' THEN 1 ELSE 0 END,
+    CASE WHEN p_outcome = 'LOSS' THEN 1 ELSE 0 END,
+    CASE WHEN p_outcome = 'DRAW' THEN 1 ELSE 0 END,
+    NOW()
+  )
+  ON CONFLICT (user_id, game_key) DO UPDATE SET
+    rating = GREATEST(100, LEAST(3000, public.game_stats.rating + v_rating_delta)),
+    xp = public.game_stats.xp + v_xp_gain,
+    wins = public.game_stats.wins + (CASE WHEN p_outcome = 'WIN' THEN 1 ELSE 0 END),
+    losses = public.game_stats.losses + (CASE WHEN p_outcome = 'LOSS' THEN 1 ELSE 0 END),
+    draws = public.game_stats.draws + (CASE WHEN p_outcome = 'DRAW' THEN 1 ELSE 0 END),
+    updated_at = NOW();
+
+  -- 3. Log match in matches table
+  INSERT INTO public.matches (game_slug, player_1_id, player_2_id, result, duration_seconds, ended_at)
+  VALUES (p_game_key, p_user_id, p_opponent_name, p_outcome, 60, NOW());
+
+  -- Fetch updated profile
+  SELECT * INTO v_profile FROM public.profiles WHERE id = p_user_id;
+
+  RETURN json_build_object(
+    'success', true,
+    'rating', v_profile.rating,
+    'level', v_profile.level,
+    'xp', v_profile.xp,
+    'rating_delta', v_rating_delta,
+    'xp_gain', v_xp_gain
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 15. DYNAMIC LEADERBOARD RPC
+CREATE OR REPLACE FUNCTION public.get_global_leaderboard(
+  p_game_key TEXT DEFAULT 'connect4',
+  p_limit INT DEFAULT 50
+)
+RETURNS TABLE (
+  id TEXT,
+  rank BIGINT,
+  name TEXT,
+  gamertag TEXT,
+  avatar_id TEXT,
+  rating INT,
+  level INT,
+  xp INT,
+  wins INT,
+  losses INT,
+  draws INT,
+  win_rate INT,
+  tier TEXT,
+  status TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id,
+    ROW_NUMBER() OVER (ORDER BY COALESCE(gs.rating, p.rating, 1200) DESC, COALESCE(gs.wins, p.wins, 0) DESC) AS rank,
+    COALESCE(p.display_name, p.username, 'Player') AS name,
+    p.username AS gamertag,
+    COALESCE(p.avatar_url, '1') AS avatar_id,
+    COALESCE(gs.rating, p.rating, 1200) AS rating,
+    COALESCE(gs.level, p.level, 1) AS level,
+    COALESCE(gs.xp, p.xp, 0) AS xp,
+    COALESCE(gs.wins, p.wins, 0) AS wins,
+    COALESCE(gs.losses, p.losses, 0) AS losses,
+    COALESCE(gs.draws, p.draws, 0) AS draws,
+    CASE 
+      WHEN (COALESCE(gs.wins, p.wins, 0) + COALESCE(gs.losses, p.losses, 0) + COALESCE(gs.draws, p.draws, 0)) > 0 
+      THEN CAST(ROUND((COALESCE(gs.wins, p.wins, 0)::NUMERIC / (COALESCE(gs.wins, p.wins, 0) + COALESCE(gs.losses, p.losses, 0) + COALESCE(gs.draws, p.draws, 0))) * 100) AS INT)
+      ELSE 0 
+    END AS win_rate,
+    CASE 
+      WHEN COALESCE(gs.rating, p.rating, 1200) >= 2000 THEN 'GRANDMASTER'
+      WHEN COALESCE(gs.rating, p.rating, 1200) >= 1700 THEN 'MASTER'
+      WHEN COALESCE(gs.rating, p.rating, 1200) >= 1500 THEN 'DIAMOND'
+      WHEN COALESCE(gs.rating, p.rating, 1200) >= 1350 THEN 'GOLD'
+      WHEN COALESCE(gs.rating, p.rating, 1200) >= 1200 THEN 'SILVER'
+      ELSE 'BRONZE'
+    END AS tier,
+    COALESCE(p.status, 'OFFLINE') AS status
+  FROM public.profiles p
+  LEFT JOIN public.game_stats gs ON gs.user_id = p.id AND gs.game_key = p_game_key
+  ORDER BY rating DESC, wins DESC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+-- 16. REALTIME PUBLICATION CONFIGURATION
 DO $$
 BEGIN
   BEGIN
@@ -800,5 +1047,10 @@ BEGIN
   BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
   EXCEPTION WHEN OTHERS THEN NULL; END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.game_stats;
+  EXCEPTION WHEN OTHERS THEN NULL; END;
 END $$;
+
 

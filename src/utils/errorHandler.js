@@ -95,7 +95,7 @@ export function formatErrorMessage(error, fallbackContext = 'Operation') {
     };
   }
 
-  if (raw.includes('Invalid PIN') || raw.includes('Incorrect PIN') || raw.includes('password') || raw.includes('auth_failed')) {
+  if (raw.includes('Invalid PIN') || raw.includes('Incorrect PIN') || raw.includes('auth_failed')) {
     return {
       title: 'Invalid Security PIN',
       message: 'The PIN entered does not match this GamerTag. Please double check your 4-digit code.',

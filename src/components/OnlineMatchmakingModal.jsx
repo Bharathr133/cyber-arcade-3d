@@ -39,6 +39,7 @@ export default function OnlineMatchmakingModal({
 
   const matchLobbyDataRef = useRef(matchLobbyData);
   matchLobbyDataRef.current = matchLobbyData;
+  const isCancelledRef = useRef(false);
 
   const triggerLaunchGame = (lobbyInfo) => {
     if (!lobbyInfo) return;
@@ -62,13 +63,13 @@ export default function OnlineMatchmakingModal({
 
   // Lock body scroll when open
   useEffect(() => {
+    const original = document.body.style.overflow;
     if (isOpen) {
-      const original = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = original;
-      };
     }
+    return () => {
+      document.body.style.overflow = original;
+    };
   }, [isOpen]);
 
   // Handle Matchmaking Search Countdown (25s limit)
@@ -92,6 +93,7 @@ export default function OnlineMatchmakingModal({
   // Reset and auto-start matchmaking on open
   useEffect(() => {
     if (!isOpen) {
+      isCancelledRef.current = true;
       setStatus('INITIALIZING');
       setRoomData(null);
       setErrorMessage('');
@@ -122,7 +124,7 @@ export default function OnlineMatchmakingModal({
   }, [isOpen, mode, gameId]);
 
   const startMatchmakingFlow = async (targetMode, currentName, currentAv) => {
-    let isCancelled = false;
+    isCancelledRef.current = false;
     setErrorMessage('');
     setSearchSecondsLeft(25);
 
@@ -138,7 +140,7 @@ export default function OnlineMatchmakingModal({
           currentAv
         );
 
-        if (isCancelled) return;
+        if (isCancelledRef.current) return;
 
         if (result?.status === 'MATCH_READY') {
           const matchId = result.match_id || result.matchId;
@@ -217,7 +219,7 @@ export default function OnlineMatchmakingModal({
           currentAv
         );
 
-        if (isCancelled) return;
+        if (isCancelledRef.current) return;
 
         if (result?.room_id || result?.room?.id) {
           const currentRoom = {
@@ -250,7 +252,7 @@ export default function OnlineMatchmakingModal({
         setStatus('JOINING');
       }
     } catch (err) {
-      if (!isCancelled) {
+      if (!isCancelledRef.current) {
         setStatus('ERROR');
         setErrorMessage(err.message || 'Connection failed.');
       }
@@ -377,17 +379,18 @@ export default function OnlineMatchmakingModal({
         bottom: 0,
         width: '100vw',
         height: '100vh',
-        background: 'rgba(15, 23, 42, 0.78)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        background: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 9999999,
-        padding: '16px',
-        boxSizing: 'border-box'
-      }}
-    >
+        zIndex: 999999,
+          padding: '16px',
+          boxSizing: 'border-box'
+        }}
+        onClick={onClose}
+      >
       <div
         className="card-enterprise animate-pop-in"
         style={{
@@ -405,28 +408,17 @@ export default function OnlineMatchmakingModal({
           boxSizing: 'border-box',
           border: '1.5px solid rgba(226, 232, 240, 0.9)'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           onClick={handleCloseAndCancel}
+          className="modal-close-btn"
           style={{
             position: 'absolute',
             top: '16px',
             right: '16px',
-            background: '#f1f5f9',
-            border: 'none',
-            borderRadius: '50%',
-            width: '32px',
-            height: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#64748b',
-            cursor: 'pointer',
-            transition: 'background 0.15s ease'
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#e2e8f0'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = '#f1f5f9'; }}
         >
           <X size={16} />
         </button>

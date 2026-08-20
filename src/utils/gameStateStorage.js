@@ -29,9 +29,10 @@ export function loadGameState(gameId, fallbackState) {
       return fallbackState;
     }
 
+    const { _savedAt, ...stateOnly } = parsed;
     return {
       ...fallbackState,
-      ...parsed
+      ...stateOnly
     };
   } catch (e) {
     return fallbackState;

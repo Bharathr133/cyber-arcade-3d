@@ -38,7 +38,15 @@ class RealtimeManager {
     // 1.A Zero-Latency Move Broadcast Listener (<10ms WebSocket)
     channel.on('broadcast', { event: 'match_move' }, (payload) => {
       const moveData = payload.payload || payload;
+      // An active move means opponent is 100% connected
+      this._clearDisconnectGracePeriod(matchId);
+      if (callbacks.onOpponentReconnect) callbacks.onOpponentReconnect();
+
       if (callbacks.onStateUpdate && moveData) {
+        // Skip self echoes if client already applied move optimistically
+        if (moveData.senderId && userId && moveData.senderId === userId) {
+          return;
+        }
         callbacks.onStateUpdate(moveData);
       }
     });
@@ -46,8 +54,63 @@ class RealtimeManager {
     // 1.B Ephemeral In-Game Emoji Reaction Listener (Zero DB overhead)
     channel.on('broadcast', { event: 'reaction_emoji' }, (payload) => {
       const data = payload.payload || payload;
+      this._clearDisconnectGracePeriod(matchId);
+      if (callbacks.onOpponentReconnect) callbacks.onOpponentReconnect();
+
       if (callbacks.onReactionEmoji && data) {
+        if (data.senderId && userId && data.senderId === userId) {
+          return;
+        }
         callbacks.onReactionEmoji(data);
+      }
+    });
+
+    // 1.B2 In-Game Quick Chat Broadcast Listener
+    channel.on('broadcast', { event: 'quick_chat' }, (payload) => {
+      const data = payload.payload || payload;
+      this._clearDisconnectGracePeriod(matchId);
+      if (callbacks.onOpponentReconnect) callbacks.onOpponentReconnect();
+
+      if (callbacks.onQuickChat && data) {
+        if (data.senderId && userId && data.senderId === userId) {
+          return;
+        }
+        callbacks.onQuickChat(data);
+      }
+    });
+
+    // 1.B3 Rematch Offer Broadcast Listener
+    channel.on('broadcast', { event: 'rematch_offer' }, (payload) => {
+      const data = payload.payload || payload;
+      if (callbacks.onRematchOffer && data) {
+        if (data.senderId && userId && data.senderId === userId) return;
+        callbacks.onRematchOffer(data);
+      }
+    });
+
+    // 1.B4 Rematch Accept Broadcast Listener
+    channel.on('broadcast', { event: 'rematch_accept' }, (payload) => {
+      const data = payload.payload || payload;
+      if (callbacks.onRematchAccept && data) {
+        callbacks.onRematchAccept(data);
+      }
+    });
+
+    // 1.B5 Rematch Decline Broadcast Listener
+    channel.on('broadcast', { event: 'rematch_decline' }, (payload) => {
+      const data = payload.payload || payload;
+      if (callbacks.onRematchDecline && data) {
+        if (data.senderId && userId && data.senderId === userId) return;
+        callbacks.onRematchDecline(data);
+      }
+    });
+
+    // 1.B6 Player Left Match Broadcast Listener
+    channel.on('broadcast', { event: 'player_left' }, (payload) => {
+      const data = payload.payload || payload;
+      if (callbacks.onPlayerLeft && data) {
+        if (data.senderId && userId && data.senderId === userId) return;
+        callbacks.onPlayerLeft(data);
       }
     });
 
@@ -59,25 +122,43 @@ class RealtimeManager {
         if (!payload.new) return;
         const incomingVersion = payload.new.state_version || 0;
         const localVersion = this.localVersions.get(matchId) || 0;
+        const isFinished = payload.new.status && payload.new.status !== 'ACTIVE';
 
-        if (incomingVersion >= localVersion) {
+        if (incomingVersion >= localVersion || isFinished) {
           this.localVersions.set(matchId, incomingVersion);
           if (callbacks.onStateUpdate) callbacks.onStateUpdate(payload.new);
         }
       }
     );
 
-    // 1.D Opponent Presence & Disconnect Handling (Robust 30s Grace Period)
+    // 1.D Opponent Presence & Disconnect Handling (Robust & Accurate)
     channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
-      const isOpponent = leftPresences.some(p => p.presence_ref !== userId);
-      if (isOpponent) {
-        this._startDisconnectGracePeriod(matchId, callbacks);
+      const hasOpponentLeft = leftPresences.some(p => p.userId && p.userId !== userId);
+      if (hasOpponentLeft) {
+        const state = channel.presenceState();
+        const opponentStillPresent = Object.entries(state || {}).some(
+          ([key, presences]) => key !== userId && presences.some(p => p.userId !== userId)
+        );
+        if (!opponentStillPresent) {
+          this._startDisconnectGracePeriod(matchId, callbacks);
+        }
       }
     });
 
     channel.on('presence', { event: 'join' }, ({ newPresences }) => {
-      const isOpponent = newPresences.some(p => p.presence_ref !== userId);
+      const isOpponent = newPresences.some(p => p.userId && p.userId !== userId);
       if (isOpponent) {
+        this._clearDisconnectGracePeriod(matchId);
+        if (callbacks.onOpponentReconnect) callbacks.onOpponentReconnect();
+      }
+    });
+
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState();
+      const opponentPresent = Object.entries(state || {}).some(
+        ([key, presences]) => key !== userId && presences.length > 0
+      );
+      if (opponentPresent) {
         this._clearDisconnectGracePeriod(matchId);
         if (callbacks.onOpponentReconnect) callbacks.onOpponentReconnect();
       }
@@ -91,8 +172,16 @@ class RealtimeManager {
       }
     });
 
-    // 1.E Reliable Polling Fallback (Every 1.2s to guarantee move delivery even across cellular firewalls)
+    // 1.E Reliable Polling Fallback (Every 1.2s, auto-stops after 5 min max)
+    let matchPollCount = 0;
+    const MAX_POLL_COUNT = 250;
     const matchPollTimer = setInterval(async () => {
+      matchPollCount++;
+      if (matchPollCount > MAX_POLL_COUNT) {
+        clearInterval(matchPollTimer);
+        this.activePollTimers.delete(channelName);
+        return;
+      }
       try {
         const { data: latestState } = await supabase
           .from('game_states')
@@ -103,7 +192,8 @@ class RealtimeManager {
         if (latestState) {
           const incomingVer = latestState.state_version || 0;
           const currentVer = this.localVersions.get(matchId) || 0;
-          if (incomingVer > currentVer) {
+          const isFinished = latestState.status && latestState.status !== 'ACTIVE';
+          if (incomingVer > currentVer || isFinished) {
             this.localVersions.set(matchId, incomingVer);
             if (callbacks.onStateUpdate) callbacks.onStateUpdate(latestState);
           }
@@ -117,29 +207,52 @@ class RealtimeManager {
   }
 
   // 2. Send Ephemeral In-Game Reaction Emoji (Zero DB Storage)
-  async sendReaction(matchId, emoji, senderName = 'Player') {
+
+  async sendReaction(matchId, emoji, senderName = 'Player', senderId = null) {
     if (!matchId || !emoji) return;
-    const channelName = `game_match:${matchId}`;
-    let channel = this.activeChannels.get(channelName);
-    const supabase = getSupabase();
-    if (!channel && supabase) {
-      channel = supabase.channel(channelName);
-      channel.subscribe();
-    }
-    if (channel) {
-      try {
-        await channel.send({
-          type: 'broadcast',
-          event: 'reaction_emoji',
-          payload: {
-            emoji,
-            senderName,
-            timestamp: Date.now()
-          }
-        });
-      } catch (e) {}
-    }
+    await this.broadcastToMatch(matchId, 'reaction_emoji', {
+      emoji,
+      sender: senderName,
+      senderId: senderId,
+      timestamp: Date.now()
+    });
   }
+
+  async requestRematch(matchId, senderId, senderName = 'Player') {
+    if (!matchId) return;
+    await this.broadcastToMatch(matchId, 'rematch_offer', {
+      senderId,
+      senderName,
+      timestamp: Date.now()
+    });
+  }
+
+  async acceptRematch(matchId, senderId) {
+    if (!matchId) return;
+    await this.broadcastToMatch(matchId, 'rematch_accept', {
+      senderId,
+      timestamp: Date.now()
+    });
+  }
+
+  async declineRematch(matchId, senderId) {
+    if (!matchId) return;
+    await this.broadcastToMatch(matchId, 'rematch_decline', {
+      senderId,
+      timestamp: Date.now()
+    });
+  }
+
+  async notifyPlayerLeft(matchId, senderId) {
+    if (!matchId) return;
+    await this.broadcastToMatch(matchId, 'player_left', {
+      senderId,
+      timestamp: Date.now()
+    });
+  }
+
+
+
 
   // 3. Subscribe to Room Channel (Lobby, Match Ready & Start Game Broadcast)
   subscribeToRoom(roomId, userId, callbacks = {}) {
@@ -256,53 +369,32 @@ class RealtimeManager {
     return channel;
   }
 
-  // 4. Broadcast Event to Room
+  // 4. Broadcast Event to Room (Reuses existing channel, never creates orphaned ones)
   async broadcastToRoom(roomId, event, payload = {}) {
     const channelName = `game_room:${roomId}`;
-    let channel = this.activeChannels.get(channelName);
-    const supabase = getSupabase();
-    if (!channel && supabase) {
-      channel = supabase.channel(channelName);
-      channel.subscribe();
-    }
-    if (channel) {
-      try {
-        await channel.send({
-          type: 'broadcast',
-          event: event,
-          payload: payload
-        });
-      } catch (e) {}
-    }
+    const channel = this.activeChannels.get(channelName);
+    if (!channel) return;
+    try {
+      await channel.send({
+        type: 'broadcast',
+        event: event,
+        payload: payload
+      });
+    } catch (e) {}
   }
 
-  // 5. Broadcast Event to Match (Moves & State Updates)
+  // 5. Broadcast Event to Match (Moves & State Updates, reuses existing channel)
   async broadcastToMatch(matchId, event, payload = {}) {
     const channelName = `game_match:${matchId}`;
-    let channel = this.activeChannels.get(channelName);
-    const supabase = getSupabase();
-    if (!channel && supabase) {
-      channel = supabase.channel(channelName);
-      channel.subscribe();
-    }
-    if (channel) {
-      try {
-        await channel.send({
-          type: 'broadcast',
-          event: event,
-          payload: payload
-        });
-      } catch (e) {}
-    }
-  }
-
-  // 5.B Send In-Game Emoji Reaction
-  async sendReaction(matchId, emoji, senderName) {
-    await this.broadcastToMatch(matchId, 'reaction_emoji', {
-      emoji,
-      sender: senderName,
-      timestamp: Date.now()
-    });
+    const channel = this.activeChannels.get(channelName);
+    if (!channel) return;
+    try {
+      await channel.send({
+        type: 'broadcast',
+        event: event,
+        payload: payload
+      });
+    } catch (e) {}
   }
 
 

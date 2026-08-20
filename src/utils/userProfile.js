@@ -15,7 +15,10 @@ export const AVATARS = [
   { id: '8', name: 'Rust', color: '#9a3412', bg: '#fff7ed' }       // Industrial Rust
 ];
 
-export const getTier = (rating) => {
+export const getTier = (rating, totalMatches = null) => {
+  if (totalMatches === 0) {
+    return { name: 'Unranked', color: '#64748b', badge: 'PROV' };
+  }
   const safeRating = Number.isFinite(rating) ? rating : 1200;
   if (safeRating >= 2000) return { name: 'Grandmaster', color: '#991b1b', badge: 'GM' };
   if (safeRating >= 1700) return { name: 'Master', color: '#581c87', badge: 'MASTER' };
@@ -28,7 +31,9 @@ export const getTier = (rating) => {
 const DEFAULT_GAME_STATS = {
   gomoku: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
   connect4: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
-  tictactoe: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 }
+  tictactoe: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+  memory: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+  ludo: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 }
 };
 
 export function getUserProfile() {
@@ -37,56 +42,79 @@ export function getUserProfile() {
     const parsed = securityEngine.safeJsonParse(raw, null);
     
     if (parsed) {
-      const { sanitizedName } = securityEngine.validatePlayerName(parsed.name || 'Player');
+      const isCustom = !!parsed.hasCustomName && parsed.name && parsed.name !== 'Guest Player';
+      const cleanName = isCustom ? parsed.name : 'Guest Player';
+      const { sanitizedName } = securityEngine.validatePlayerName(cleanName);
 
       const gameStats = {
         gomoku: { ...DEFAULT_GAME_STATS.gomoku, ...(parsed.gameStats?.gomoku || {}) },
         connect4: { ...DEFAULT_GAME_STATS.connect4, ...(parsed.gameStats?.connect4 || {}) },
-        tictactoe: { ...DEFAULT_GAME_STATS.tictactoe, ...(parsed.gameStats?.tictactoe || {}) }
+        tictactoe: { ...DEFAULT_GAME_STATS.tictactoe, ...(parsed.gameStats?.tictactoe || {}) },
+        memory: { ...DEFAULT_GAME_STATS.memory, ...(parsed.gameStats?.memory || {}) },
+        ludo: { ...DEFAULT_GAME_STATS.ludo, ...(parsed.gameStats?.ludo || {}) }
       };
 
+      const wins = Math.max(0, Number(parsed.wins) || 0);
+      const losses = Math.max(0, Number(parsed.losses) || 0);
+      const draws = Math.max(0, Number(parsed.draws) || 0);
+      const totalMatches = wins + losses + draws;
+
       return {
-        id: securityEngine.sanitizeText(parsed.id || 'user_' + generateUUID().substring(0, 8), 36),
+        id: securityEngine.sanitizeText(parsed.id || 'guest_' + generateUUID().substring(0, 8), 36),
         name: sanitizedName,
+
         gamertag: parsed.gamertag || null,
         avatarId: ['1', '2', '3', '4', '5', '6', '7', '8'].includes(parsed.avatarId) ? parsed.avatarId : '1',
         level: Math.max(1, Math.min(100, Number(parsed.level) || 1)),
         xp: Math.max(0, Math.min(100000, Number(parsed.xp) || 0)),
         rating: Math.max(100, Math.min(3000, Number(parsed.rating) || 1200)),
-        wins: Math.max(0, Number(parsed.wins) || 0),
-        losses: Math.max(0, Number(parsed.losses) || 0),
-        draws: Math.max(0, Number(parsed.draws) || 0),
+        wins,
+        losses,
+        draws,
+        totalMatches,
+        dailyStreak: totalMatches > 0 ? Math.max(0, Number(parsed.dailyStreak) || 0) : 0,
+        lastStreakDate: parsed.lastStreakDate || null,
         isGuest: parsed.isGuest !== false,
+        hasCustomName: isCustom,
+        isNewUser: parsed.isNewUser === true,
+        authProvider: parsed.authProvider || (parsed.email ? 'email' : 'guest'),
         gameStats,
         history: Array.isArray(parsed.history) ? parsed.history.slice(0, 20) : [],
-        isRegistered: true
+        isRegistered: !parsed.isGuest && !!(parsed.email || parsed.gamertag)
       };
     }
 
-    // Default seamless standard profile
-    const defaultId = 'player_' + generateUUID().substring(0, 8);
+    // Default clean guest profile for brand new visitors
+    const defaultAvatarId = '1';
+    const defaultId = 'guest_' + generateUUID().substring(0, 8);
     const defaultProfile = {
       id: defaultId,
-      name: 'Player',
+      name: 'Guest Player',
       gamertag: null,
-      avatarId: '1',
+      avatarId: defaultAvatarId,
       level: 1,
       xp: 0,
       rating: 1200,
       wins: 0,
       losses: 0,
       draws: 0,
+      totalMatches: 0,
+      dailyStreak: 0,
+      lastStreakDate: null,
       isGuest: true,
+      hasCustomName: false,
+      isNewUser: true,
+      authProvider: 'guest',
       gameStats: { ...DEFAULT_GAME_STATS },
       history: [],
-      isRegistered: true
+      isRegistered: false
     };
     saveUserProfile(defaultProfile);
     return defaultProfile;
   } catch (e) {
     return {
-      id: 'player_guest',
-      name: 'Player',
+      id: 'guest_fallback',
+      name: 'Guest Player',
       gamertag: null,
       avatarId: '1',
       level: 1,
@@ -95,14 +123,20 @@ export function getUserProfile() {
       wins: 0,
       losses: 0,
       draws: 0,
+      totalMatches: 0,
+      dailyStreak: 0,
+      lastStreakDate: null,
       isGuest: true,
+      hasCustomName: false,
+      isNewUser: true,
+
+      authProvider: 'guest',
       gameStats: { ...DEFAULT_GAME_STATS },
       history: [],
-      isRegistered: true
+      isRegistered: false
     };
   }
 }
-
 
 export function saveUserProfile(updated) {
   try {
@@ -112,12 +146,16 @@ export function saveUserProfile(updated) {
     const gameStats = {
       gomoku: { ...DEFAULT_GAME_STATS.gomoku, ...(updated.gameStats?.gomoku || {}) },
       connect4: { ...DEFAULT_GAME_STATS.connect4, ...(updated.gameStats?.connect4 || {}) },
-      tictactoe: { ...DEFAULT_GAME_STATS.tictactoe, ...(updated.gameStats?.tictactoe || {}) }
+      tictactoe: { ...DEFAULT_GAME_STATS.tictactoe, ...(updated.gameStats?.tictactoe || {}) },
+      memory: { ...DEFAULT_GAME_STATS.memory, ...(updated.gameStats?.memory || {}) },
+      ludo: { ...DEFAULT_GAME_STATS.ludo, ...(updated.gameStats?.ludo || {}) }
     };
 
     const safeData = {
-      id: securityEngine.sanitizeText(updated.id || `user_${Date.now()}`, 24),
+      id: securityEngine.sanitizeText(updated.id || `user_${Date.now()}`, 36),
       name: sanitizedName,
+      gamertag: updated.gamertag || null,
+      email: updated.email || null,
       avatarId: ['1', '2', '3', '4', '5', '6', '7', '8'].includes(updated.avatarId) ? updated.avatarId : '1',
       level: Math.max(1, Math.min(100, Number(updated.level) || 1)),
       xp: Math.max(0, Math.min(100000, Number(updated.xp) || 0)),
@@ -125,10 +163,17 @@ export function saveUserProfile(updated) {
       wins: Math.max(0, Number(updated.wins) || 0),
       losses: Math.max(0, Number(updated.losses) || 0),
       draws: Math.max(0, Number(updated.draws) || 0),
+      dailyStreak: Math.max(0, Number(updated.dailyStreak) || 0),
+      lastStreakDate: updated.lastStreakDate || new Date().toISOString().split('T')[0],
+      isGuest: updated.isGuest !== false,
+      hasCustomName: updated.hasCustomName !== undefined ? !!updated.hasCustomName : true,
+      isNewUser: updated.isNewUser === true,
+      authProvider: updated.authProvider || (updated.email ? 'email' : 'guest'),
       gameStats,
       history: Array.isArray(updated.history) ? updated.history.slice(0, 20) : [],
       isRegistered: true
     };
+
 
     // Attach cryptographic signature
     safeData._sig = securityEngine.generateSignature(safeData);
@@ -150,13 +195,17 @@ export function logoutUserProfile() {
 
 export function recordMatchResult(gameKey, outcome, opponentName = 'Computer') {
   const normalizedKey = gameKey.toLowerCase().includes('gomoku') ? 'gomoku' :
-                        gameKey.toLowerCase().includes('connect') ? 'connect4' : 'tictactoe';
+                        gameKey.toLowerCase().includes('connect') ? 'connect4' :
+                        gameKey.toLowerCase().includes('memory') ? 'memory' :
+                        gameKey.toLowerCase().includes('ludo') ? 'ludo' : 'tictactoe';
   const gameDisplayName = normalizedKey === 'gomoku' ? 'Gomoku (15×15)' :
-                          normalizedKey === 'connect4' ? 'Connect 4 (7×6)' : 'Tic-Tac-Toe (3×3)';
+                          normalizedKey === 'connect4' ? 'Connect 4 (7×6)' :
+                          normalizedKey === 'memory' ? 'Memory Match' :
+                          normalizedKey === 'ludo' ? 'Ludo Championship' : 'Tic-Tac-Toe (3×3)';
 
   const profile = getUserProfile() || {
-    id: 'user_default',
-    name: 'Player',
+    id: 'guest_' + Math.random().toString(36).substring(2, 10),
+    name: 'Guest Player',
     avatarId: '1',
     level: 1,
     xp: 0,
@@ -164,10 +213,14 @@ export function recordMatchResult(gameKey, outcome, opponentName = 'Computer') {
     wins: 0,
     losses: 0,
     draws: 0,
+    dailyStreak: 1,
+    lastStreakDate: new Date().toISOString().split('T')[0],
     gameStats: { ...DEFAULT_GAME_STATS },
     history: [],
-    isRegistered: true
+    isGuest: true,
+    isRegistered: false
   };
+
 
   let ratingDelta = 0;
   let xpGain = 10;
@@ -187,6 +240,22 @@ export function recordMatchResult(gameKey, outcome, opponentName = 'Computer') {
     xpGain = 15;
     profile.draws = (profile.draws || 0) + 1;
     profile.gameStats[normalizedKey].draws = (profile.gameStats[normalizedKey].draws || 0) + 1;
+  }
+
+  // Dynamic Real Daily Streak Calculation
+  const todayStr = new Date().toISOString().split('T')[0];
+  const lastActiveStr = profile.lastStreakDate || null;
+  if (!lastActiveStr) {
+    profile.dailyStreak = 1;
+    profile.lastStreakDate = todayStr;
+  } else if (lastActiveStr !== todayStr) {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    if (lastActiveStr === yesterday) {
+      profile.dailyStreak = (profile.dailyStreak || 1) + 1;
+    } else {
+      profile.dailyStreak = 1;
+    }
+    profile.lastStreakDate = todayStr;
   }
 
   // Update Global & Per-Game ELO
@@ -210,6 +279,7 @@ export function recordMatchResult(gameKey, outcome, opponentName = 'Computer') {
   }
 
   const sanitizedOpponent = securityEngine.sanitizeText(opponentName, 18);
+
   const matchEntry = {
     id: `m_${Date.now()}`,
     game: gameDisplayName,

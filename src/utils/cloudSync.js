@@ -1,186 +1,180 @@
-import { getSupabase, isCloudConfigured } from './supabaseClient.js';
-import { securityEngine } from './securityEngine.js';
-import { fetchFromApi } from '../services/apiClient.js';
+import { getSupabase } from './supabaseClient.js';
 
-// Global Cloud Sync & Analytics Service (100% Real Data, Zero Mock Data)
+// Global Cloud Sync & Leaderboard Service (Direct Supabase Integration)
 class CloudSyncService {
 
-  // Sync entire local profile, per-game stats, and latest match to Supabase
+  // 1. Direct Supabase Profile & Game Stats Sync
   async syncProfileToCloud(profile, latestMatch = null) {
-    if (!isCloudConfigured() || !profile?.id) return { success: false, reason: 'NOT_CONFIGURED' };
+    if (!profile?.id) return { success: false, reason: 'NO_PROFILE' };
+
+    // STRICT: Only real registered/authenticated users with an email are saved to Supabase profiles.
+    // Guests only keep their local session in localStorage.
+    const isGuest = profile.isGuest || 
+                    !profile.email || 
+                    !profile.isRegistered ||
+                    profile.id.startsWith('player_') || 
+                    profile.id.startsWith('user_') || 
+                    profile.id.startsWith('guest_') ||
+                    profile.id.startsWith('anon_');
+
+    if (isGuest) {
+      return { success: true, localOnly: true };
+    }
+
 
     const supabase = getSupabase();
-    if (!supabase) return { success: false, reason: 'NO_CLIENT' };
+    if (!supabase) return { success: false, reason: 'NO_DB' };
 
     try {
-      // 1. Upsert Profile
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: profile.id,
-          name: securityEngine.sanitizeText(profile.name, 20),
-          avatar_id: profile.avatarId || '1',
-          rating: Number(profile.rating) || 1200,
-          level: Number(profile.level) || 1,
-          xp: Number(profile.xp) || 0,
-          wins: Number(profile.wins) || 0,
-          losses: Number(profile.losses) || 0,
-          draws: Number(profile.draws) || 0,
-          updated_at: new Date().toISOString()
-        });
+      // 1. Upsert Main Profile
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: profile.id,
+        display_name: String(profile.name || 'Player').substring(0, 25),
+        avatar_url: String(profile.avatarId || '1'),
+        rating: Number(profile.rating) || 1200,
+        level: Number(profile.level) || 1,
+        xp: Number(profile.xp) || 0,
+        wins: Number(profile.wins) || 0,
+        losses: Number(profile.losses) || 0,
+        draws: Number(profile.draws) || 0,
+        last_seen: new Date().toISOString()
+      });
 
       if (profileError) {
-        console.warn('Cloud profile sync notice:', profileError.message);
+        console.warn('Cloud profile sync note:', profileError.message);
       }
 
       // 2. Upsert Per-Game Stats
-      if (profile.gameStats) {
-        const gameEntries = Object.entries(profile.gameStats).map(([gameKey, data]) => ({
-          user_id: profile.id,
-          game_key: gameKey,
-          rating: Number(data.rating) || 1200,
-          level: Number(data.level) || 1,
-          xp: Number(data.xp) || 0,
-          wins: Number(data.wins) || 0,
-          losses: Number(data.losses) || 0,
-          draws: Number(data.draws) || 0,
-          updated_at: new Date().toISOString()
-        }));
+      if (profile.gameStats && typeof profile.gameStats === 'object') {
+        const VALID_GAMES = ['gomoku', 'connect4', 'tictactoe', 'memory', 'ludo'];
+        const statRows = Object.entries(profile.gameStats)
+          .filter(([gameKey]) => VALID_GAMES.includes(gameKey))
+          .map(([gameKey, stat]) => ({
+            user_id: profile.id,
+            game_key: gameKey,
+            rating: Number(stat.rating) || 1200,
+            level: Number(stat.level) || 1,
+            xp: Number(stat.xp) || 0,
+            wins: Number(stat.wins) || 0,
+            losses: Number(stat.losses) || 0,
+            draws: Number(stat.draws) || 0,
+            updated_at: new Date().toISOString()
+          }));
 
-        if (gameEntries.length > 0) {
-          const { error: statsError } = await supabase
-            .from('game_stats')
-            .upsert(gameEntries, { onConflict: 'user_id,game_key' });
-
-          if (statsError) {
-            console.warn('Cloud game stats sync notice:', statsError.message);
-          }
+        if (statRows.length > 0) {
+          await supabase.from('game_stats').upsert(statRows, { onConflict: 'user_id,game_key' }).catch(() => {});
         }
       }
 
-      // 3. Insert Match History Record
-      if (latestMatch) {
-        const { error: matchError } = await supabase
-          .from('matches')
-          .insert({
-            id: latestMatch.id || `m_${Date.now()}`,
-            user_id: profile.id,
-            game_key: latestMatch.gameKey || 'gomoku',
-            game_title: latestMatch.game || 'Game',
-            opponent_name: securityEngine.sanitizeText(latestMatch.opponent, 20),
-            outcome: latestMatch.outcome,
-            rating_delta: latestMatch.ratingDelta || 0
-          });
-
-        if (matchError) {
-          console.warn('Cloud match history sync notice:', matchError.message);
-        }
+      // 3. Log match if provided
+      if (latestMatch && latestMatch.gameKey) {
+        await supabase.from('matches').insert({
+          game_slug: latestMatch.gameKey,
+          player_1_id: profile.id,
+          player_2_id: String(latestMatch.opponentName || 'Opponent').substring(0, 50),
+          result: ['WIN', 'LOSS', 'DRAW'].includes(latestMatch.outcome) ? latestMatch.outcome : 'WIN',
+          created_at: new Date().toISOString()
+        }).catch(() => {});
       }
 
       return { success: true };
     } catch (e) {
-      console.warn('Cloud sync error:', e);
-      return { success: false, error: e };
+      return { success: false, error: e?.message };
     }
   }
 
-  // Fetch Global Top 50 Leaderboard (Strictly Real Supabase Cloud Data)
-  async fetchGlobalLeaderboard(gameKey = 'connect4') {
-    const safeGame = ['connect4', 'tictactoe', 'gomoku'].includes(gameKey) ? gameKey : 'connect4';
+  // 2. Fetch Complete Profile & Game Stats from Supabase
+  async fetchProfileFromCloud(userId) {
+    if (!userId) return null;
+    const supabase = getSupabase();
+    if (!supabase) return null;
 
-    // 1. Try Serverless Backend Proxy first (Zero Client Key Exposure)
-    const apiRes = await fetchFromApi(`/api/leaderboard?limit=50&game=${safeGame}`);
-    if (apiRes.ok && apiRes.data?.success && Array.isArray(apiRes.data?.players)) {
-      return apiRes.data.players;
+    try {
+      // 1. Fetch Profile
+      const { data: prof, error: pErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (pErr || !prof) return null;
+
+      // 2. Fetch Game Stats
+      const { data: statsRows } = await supabase
+        .from('game_stats')
+        .select('*')
+        .eq('user_id', userId);
+
+      const gameStats = {
+        gomoku: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+        connect4: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+        tictactoe: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+        memory: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+        ludo: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 }
+      };
+
+      if (Array.isArray(statsRows)) {
+        statsRows.forEach(row => {
+          if (row.game_key && gameStats[row.game_key]) {
+            gameStats[row.game_key] = {
+              rating: Number(row.rating) || 1200,
+              level: Number(row.level) || 1,
+              xp: Number(row.xp) || 0,
+              wins: Number(row.wins) || 0,
+              losses: Number(row.losses) || 0,
+              draws: Number(row.draws) || 0
+            };
+          }
+        });
+      }
+
+      return {
+        id: prof.id,
+        name: prof.display_name || 'Player',
+        avatarId: prof.avatar_url || '1',
+        rating: Number(prof.rating) || 1200,
+        level: Number(prof.level) || 1,
+        xp: Number(prof.xp) || 0,
+        wins: Number(prof.wins) || 0,
+        losses: Number(prof.losses) || 0,
+        draws: Number(prof.draws) || 0,
+        gameStats,
+        isGuest: false,
+        isRegistered: true,
+        hasCustomName: true
+      };
+    } catch (e) {
+      return null;
     }
+  }
 
-    // 2. Direct Fallback
-    if (!isCloudConfigured()) {
-      return [];
-    }
-
+  // 3. Direct Supabase Leaderboard Query
+  async fetchGlobalLeaderboard(gameKey = 'connect4', limit = 50) {
     const supabase = getSupabase();
     if (!supabase) return [];
 
     try {
-      // 1. Fetch game_stats for the selected game
-      const { data: stats, error: statsError } = await supabase
-        .from('game_stats')
-        .select('*')
-        .eq('game_key', safeGame)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, display_name, rating, level, wins, losses, avatar_url')
         .order('rating', { ascending: false })
-        .limit(100);
+        .limit(limit);
 
-      if (statsError || !stats) return [];
-
-      const userIds = stats.map(s => s.user_id).filter(Boolean);
-
-      // 2. Fetch corresponding profiles
-      let profileMap = new Map();
-      if (userIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, name, display_name, username, avatar_id, avatar_url, status, last_seen')
-          .in('id', userIds);
-
-        if (profiles) {
-          profiles.forEach(p => profileMap.set(p.id, p));
-        }
+      if (!error && Array.isArray(data)) {
+        return data.map((u, idx) => ({
+          rank: idx + 1,
+          id: u.id,
+          username: u.display_name || 'Player',
+          name: u.display_name || 'Player',
+          avatar_url: u.avatar_url || '1',
+          rating: Number(u.rating) || 1200,
+          level: Number(u.level) || 1,
+          wins: Number(u.wins) || 0,
+          losses: Number(u.losses) || 0
+        }));
       }
-
-      // 3. Filter for REAL users only
-      const realPlayers = [];
-      const seenNames = new Set();
-
-      for (const s of stats) {
-        const p = profileMap.get(s.user_id);
-        const rawName = p?.name || p?.display_name || p?.username || '';
-        const cleanName = typeof rawName === 'string' ? rawName.trim() : '';
-
-        // Ignore dummy, player_ and test names
-        const isInvalidName = !cleanName ||
-          cleanName.toLowerCase() === 'player' ||
-          cleanName.toLowerCase().startsWith('player_') ||
-          cleanName.toLowerCase().startsWith('user_') ||
-          cleanName.toLowerCase().startsWith('diagnostic_') ||
-          cleanName.toLowerCase().startsWith('test_user_');
-
-        if (isInvalidName) continue;
-
-        const nameKey = cleanName.toLowerCase();
-        if (seenNames.has(nameKey)) continue;
-        seenNames.add(nameKey);
-
-        const wins = Number(s.wins) || 0;
-        const losses = Number(s.losses) || 0;
-        const draws = Number(s.draws) || 0;
-        const total = wins + losses + draws;
-        const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
-
-        realPlayers.push({
-          id: s.user_id,
-          name: cleanName,
-          avatarId: p?.avatar_id || p?.avatar_url || '1',
-          rating: Number(s.rating) || 1200,
-          level: Number(s.level) || 1,
-          xp: Number(s.xp) || 0,
-          wins,
-          losses,
-          draws,
-          totalMatches: total,
-          winRate,
-          status: p?.status || 'ONLINE'
-        });
-      }
-
-      realPlayers.sort((a, b) => b.rating - a.rating || b.wins - a.wins);
-
-      return realPlayers.slice(0, 50).map((row, index) => ({
-        ...row,
-        rank: index + 1
-      }));
+      return [];
     } catch (e) {
-      console.warn('Leaderboard fetch error:', e);
       return [];
     }
   }

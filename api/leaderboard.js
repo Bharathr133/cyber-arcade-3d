@@ -1,8 +1,22 @@
-import { getServerSupabase, sendJsonResponse } from './_lib/supabaseServer.js';
+import { getServerSupabase, sendJsonResponse, checkRateLimit } from './_lib/supabaseServer.js';
+
+function sanitizeError(err) {
+  const msg = String(err?.message || '');
+  if (msg.includes('password') || msg.includes('secret') || msg.includes('key')) return 'Internal processing error';
+  if (msg.length > 120) return 'Internal server error';
+  return msg || 'Internal server error';
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return sendJsonResponse(res, 405, { error: 'Method Not Allowed' });
+  }
+
+  // Rate limit: 60 requests per minute per IP
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+  if (!checkRateLimit(`leaderboard:${ip}`)) {
+    res.setHeader('Retry-After', '60');
+    return sendJsonResponse(res, 429, { error: 'Too many requests. Please try again later.' });
   }
 
   const supabase = getServerSupabase();
@@ -12,7 +26,9 @@ export default async function handler(req, res) {
 
   try {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
-    const gameFilter = req.query.game || req.query.filter || 'connect4'; // 'connect4', 'tictactoe', 'gomoku'
+    const VALID_GAMES = ['gomoku', 'connect4', 'tictactoe', 'memory', 'ludo'];
+    const gameFilter = VALID_GAMES.includes(req.query.game) ? req.query.game : (VALID_GAMES.includes(req.query.filter) ? req.query.filter : 'connect4');
+
 
     // 1. Fetch game_stats for the selected game
     const { data: gameStats, error: statsError } = await supabase
@@ -47,25 +63,14 @@ export default async function handler(req, res) {
 
     for (const stat of (gameStats || [])) {
       const profile = profileMap.get(stat.user_id);
-      const rawName = profile?.name || profile?.display_name || profile?.username || '';
-      const cleanName = typeof rawName === 'string' ? rawName.trim() : '';
-
-      // Filter out invalid / dummy / bot names
-      const isInvalidName = !cleanName ||
-        cleanName.toLowerCase() === 'player' ||
-        cleanName.toLowerCase().startsWith('player_') ||
-        cleanName.toLowerCase().startsWith('user_') ||
-        cleanName.toLowerCase().startsWith('diagnostic_') ||
-        cleanName.toLowerCase().startsWith('test_user_');
-
-      if (isInvalidName) {
-        continue;
-      }
+      const rawName = profile?.display_name || profile?.username || profile?.name || '';
+      const cleanName = typeof rawName === 'string' && rawName.trim() ? rawName.trim() : `Guest_${String(stat.user_id).slice(-4)}`;
 
       // Deduplicate by name if multiple local IDs share the same player name
       const nameKey = cleanName.toLowerCase();
       if (seenNames.has(nameKey)) continue;
       seenNames.add(nameKey);
+
 
       const wins = Number(stat.wins) || 0;
       const losses = Number(stat.losses) || 0;
@@ -110,6 +115,6 @@ export default async function handler(req, res) {
       players: rankedPlayers
     });
   } catch (err) {
-    return sendJsonResponse(res, 500, { error: err.message || 'Internal server error' });
+    return sendJsonResponse(res, 500, { error: sanitizeError(err) });
   }
 }

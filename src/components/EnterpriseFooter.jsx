@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink, Heart, ShieldCheck, Zap, Globe, Github } from 'lucide-react';
+import { ExternalLink, ShieldCheck, Zap } from 'lucide-react';
 
 export default function EnterpriseFooter() {
   return (
@@ -9,17 +9,15 @@ export default function EnterpriseFooter() {
         width: '100%',
         maxWidth: '100%',
         marginTop: 'auto',
-        paddingTop: '40px',
+        paddingTop: '36px',
         paddingBottom: '24px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         gap: '12px',
-        borderTop: '1px solid #e2e8f0'
+        borderTop: '1px solid #E4E4E7'
       }}
     >
-
-
       {/* Top Footer Row */}
       <div style={{
         width: '100%',
@@ -29,38 +27,21 @@ export default function EnterpriseFooter() {
         flexWrap: 'wrap',
         gap: '12px'
       }}>
-        {/* Brand & Dev Credit */}
+        {/* Brand & Platform Info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
-            width: '26px', height: '26px', borderRadius: '8px',
-            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#ffffff'
+            width: '24px', height: '24px', borderRadius: '6px',
+            background: '#18181B', color: '#FFFFFF',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
           }}>
-            <Zap size={14} />
+            <Zap size={13} fill="#FFFFFF" />
           </div>
-          <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
-            2-PLAYER ARENA
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: '#18181B' }}>
+            games4u
           </span>
-          <span style={{ color: '#94a3b8' }}>•</span>
-          <span style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: '#64748b' }}>
-            Developed by{' '}
-            <a
-              href="https://bharathr.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: '#2563eb',
-                fontWeight: '800',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px'
-              }}
-            >
-              Bharath R
-              <ExternalLink size={11} />
-            </a>
+          <span style={{ color: '#A1A1AA' }}>•</span>
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: '#52525B' }}>
+            Competitive 3D Board & Strategy Arena
           </span>
         </div>
 
@@ -70,15 +51,15 @@ export default function EnterpriseFooter() {
           alignItems: 'center',
           gap: '6px',
           padding: '4px 10px',
-          borderRadius: '12px',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          background: '#FFFFFF',
+          border: '1px solid #E4E4E7',
           fontFamily: 'var(--font-mono)',
           fontSize: '11px',
-          color: '#475569'
+          color: '#52525B'
         }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#16a34a' }} />
-          <span>WebRTC P2P • Anti-Cheat Active</span>
+          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16A34A' }} />
+          <span>Multiplayer Realtime Engine • Low Latency</span>
         </div>
       </div>
 
@@ -92,21 +73,16 @@ export default function EnterpriseFooter() {
         gap: '8px',
         fontFamily: 'var(--font-mono)',
         fontSize: '11px',
-        color: '#94a3b8'
+        color: '#A1A1AA'
       }}>
-        <span>© {new Date().getFullYear()} Championship Arena. Zero-Latency Peer Gaming.</span>
+        <span>© {new Date().getFullYear()} games4u. All rights reserved.</span>
+
         <div style={{ display: 'flex', gap: '14px' }}>
-          <a
-            href="https://bharathr.vercel.app/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: '#64748b', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <Globe size={12} />
-            <span>Portfolio</span>
-          </a>
+          <span>Free Online Strategy Games</span>
         </div>
       </div>
     </footer>
+
+
   );
 }

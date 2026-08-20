@@ -50,14 +50,15 @@ export function CustomAlertProvider({ children }) {
   const cancelBtnRef = useRef(null);
 
   // Lock body scroll when open
+  const originalOverflowRef = useRef(null);
   useEffect(() => {
     if (state.isOpen) {
-      const originalOverflow = document.body.style.overflow;
+      originalOverflowRef.current = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
     }
+    return () => {
+      document.body.style.overflow = originalOverflowRef.current || '';
+    };
   }, [state.isOpen]);
 
   // Auto-focus primary action button on modal open

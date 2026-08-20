@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Trophy, X, RefreshCw, Database, Search, Crown, Medal, Flame,
-  ShieldCheck, ArrowUpRight, User, CircleDot, Hash, Circle
+  ShieldCheck, ArrowUpRight, User, CircleDot, Hash, Circle, Layers, Dices
 } from 'lucide-react';
 import { cloudSync } from '../utils/cloudSync.js';
 import { isCloudConfigured } from '../utils/supabaseClient.js';
@@ -14,24 +14,25 @@ export default function GlobalLeaderboardModal({
   onClose,
   currentUserProfile
 }) {
-  const [activeTab, setActiveTab] = useState('connect4'); // 'connect4', 'tictactoe', 'gomoku'
+  const [activeTab, setActiveTab] = useState('connect4'); // 'connect4', 'tictactoe', 'gomoku', 'memory', 'ludo'
   const [leaderboard, setLeaderboard] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasCloud, setHasCloud] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
     if (isOpen) {
       const configured = isCloudConfigured();
       setHasCloud(configured);
-      loadLeaderboard(activeTab);
-
-      const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
+      if (configured) {
+        loadLeaderboard(activeTab);
+      }
     }
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
   }, [isOpen, activeTab]);
 
   const loadLeaderboard = async (tab) => {
@@ -56,33 +57,68 @@ export default function GlobalLeaderboardModal({
   const TABS = [
     { id: 'connect4', label: 'Connect 4', icon: CircleDot, tag: '7×6 GRID' },
     { id: 'tictactoe', label: 'Tic-Tac-Toe', icon: Hash, tag: '3×3 FAST' },
-    { id: 'gomoku', label: 'Gomoku', icon: Circle, tag: '15×15 PRO' }
+    { id: 'gomoku', label: 'Gomoku', icon: Circle, tag: '15×15 PRO' },
+    { id: 'memory', label: 'Memory', icon: Layers, tag: 'SPEED' },
+    { id: 'ludo', label: 'Ludo', icon: Dices, tag: '2-4P' }
   ];
+
+
+  // Dynamic Leaderboard: Combines cloud database records or initializes with current user's live stats
+  const activeLeaderboardList = useMemo(() => {
+    if (leaderboard && leaderboard.length > 0) return leaderboard;
+    if (currentUserProfile) {
+      const currentGameKey = activeTab;
+      const gameStat = currentUserProfile.gameStats?.[currentGameKey] || {};
+      const wins = Number(gameStat.wins || currentUserProfile.wins || 0);
+      const losses = Number(gameStat.losses || currentUserProfile.losses || 0);
+      const draws = Number(gameStat.draws || currentUserProfile.draws || 0);
+      const total = wins + losses + draws;
+      const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+      return [{
+        id: currentUserProfile.id,
+        rank: 1,
+        name: currentUserProfile.name,
+        gamertag: currentUserProfile.gamertag,
+        avatarId: currentUserProfile.avatarId || '1',
+        rating: Number(gameStat.rating || currentUserProfile.rating || 1200),
+        level: Number(gameStat.level || currentUserProfile.level || 1),
+        xp: Number(gameStat.xp || currentUserProfile.xp || 0),
+        wins,
+        losses,
+        draws,
+        totalMatches: total,
+        winRate,
+        status: 'ONLINE'
+      }];
+    }
+    return [];
+  }, [leaderboard, currentUserProfile, activeTab]);
 
   // Filter players based on search query
   const filteredLeaderboard = useMemo(() => {
-    if (!searchQuery.trim()) return leaderboard;
+    if (!searchQuery.trim()) return activeLeaderboardList;
     const q = searchQuery.toLowerCase().trim();
-    return leaderboard.filter(p => 
+    return activeLeaderboardList.filter(p => 
       p.name?.toLowerCase().includes(q) || 
       p.rank?.toString() === q ||
       p.rating?.toString().includes(q)
     );
-  }, [leaderboard, searchQuery]);
+  }, [activeLeaderboardList, searchQuery]);
 
   // Current player's ranking in this list
   const currentRankIndex = useMemo(() => {
     if (!currentUserProfile?.name) return -1;
     const myName = currentUserProfile.name.toLowerCase().trim();
-    return leaderboard.findIndex(p => p.name?.toLowerCase().trim() === myName || p.id === currentUserProfile.id);
-  }, [leaderboard, currentUserProfile]);
+    return activeLeaderboardList.findIndex(p => p.name?.toLowerCase().trim() === myName || p.id === currentUserProfile.id);
+  }, [activeLeaderboardList, currentUserProfile]);
 
-  const myCurrentRank = currentRankIndex !== -1 ? leaderboard[currentRankIndex] : null;
+  const myCurrentRank = currentRankIndex !== -1 ? activeLeaderboardList[currentRankIndex] : null;
 
   // Top 3 Podium
-  const top1 = leaderboard[0];
-  const top2 = leaderboard[1];
-  const top3 = leaderboard[2];
+  const top1 = activeLeaderboardList[0];
+  const top2 = activeLeaderboardList[1];
+  const top3 = activeLeaderboardList[2];
+
 
   if (!isOpen) return null;
 
@@ -92,9 +128,9 @@ export default function GlobalLeaderboardModal({
         position: 'fixed',
         top: 0, left: 0, right: 0, bottom: 0,
         width: '100vw', height: '100vh',
-        background: 'rgba(15, 23, 42, 0.82)',
-        backdropFilter: 'blur(18px)',
-        WebkitBackdropFilter: 'blur(18px)',
+        background: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -176,11 +212,11 @@ export default function GlobalLeaderboardModal({
 
             <button
               onClick={onClose}
+              className="modal-close-btn"
               style={{
-                width: '34px', height: '34px', borderRadius: '8px',
-                background: '#f1f5f9', border: 'none',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#64748b', cursor: 'pointer'
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
               }}
             >
               <X size={18} />
@@ -188,15 +224,16 @@ export default function GlobalLeaderboardModal({
           </div>
         </div>
 
-        {/* 3 Game Tabs (No Overall Tab) */}
+        {/* 5 Tournament Game Tabs */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(88px, 1fr))',
           gap: '6px',
           background: '#f1f5f9',
           padding: '4px',
           borderRadius: '14px'
         }}>
+
           {TABS.map((tab) => {
             const IconComp = tab.icon;
             const isSel = activeTab === tab.id;
@@ -377,6 +414,16 @@ export default function GlobalLeaderboardModal({
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '10px', color: '#64748b' }}>
               <RefreshCw size={22} className="animate-spin" />
               <span style={{ fontSize: '12px', fontWeight: '700' }}>Fetching real tournament records...</span>
+            </div>
+          ) : !hasCloud ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '24px', textAlign: 'center', gap: '8px' }}>
+              <Database size={32} color="#cbd5e1" />
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
+                Cloud Leaderboard Not Configured
+              </div>
+              <p style={{ fontSize: '11px', color: '#64748b', margin: 0, maxWidth: '280px' }}>
+                Connect to Supabase to enable global tournament rankings and cross-device profile sync.
+              </p>
             </div>
           ) : filteredLeaderboard.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '24px', textAlign: 'center', gap: '8px' }}>

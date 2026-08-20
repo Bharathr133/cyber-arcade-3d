@@ -32,3 +32,29 @@ export function sendJsonResponse(res, statusCode, data) {
   res.setHeader('Cache-Control', 'no-store, max-age=0');
   return res.status(statusCode).json(data);
 }
+
+// Simple in-memory rate limiter (resets on cold start)
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60_000;
+const RATE_LIMIT_MAX = 60;
+
+export function checkRateLimit(key) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now - entry.start > RATE_LIMIT_WINDOW) {
+    rateLimitMap.set(key, { start: now, count: 1 });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) return false;
+  return true;
+}
+
+// Sanitize error messages to prevent info leakage
+export function sanitizeError(err) {
+  const msg = String(err?.message || '');
+  if (msg.includes('password') || msg.includes('secret') || msg.includes('key') || msg.includes('token'))
+    return 'Internal processing error';
+  if (msg.length > 120) return 'Internal server error';
+  return msg || 'Internal server error';
+}

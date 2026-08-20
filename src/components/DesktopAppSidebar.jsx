@@ -1,62 +1,78 @@
 import React, { useState } from 'react';
 import { 
   Trophy, BarChart3, Settings, KeyRound, PanelLeftClose, PanelLeftOpen,
-  ShieldCheck, Zap, Sparkles, User, Flame, Compass, Radio, ArrowRight
+  ShieldCheck, Zap, Sparkles, User, Flame, Compass, Radio, ArrowRight,
+  LogOut, LogIn
 } from 'lucide-react';
-
 import { AVATARS, getTier } from '../utils/userProfile.js';
 import { soundSynth } from '../utils/soundSynth.js';
-import { TicTacToeIcon, ConnectFourIcon, GomokuIcon } from './GameIcons.jsx';
+import { TicTacToeIcon, ConnectFourIcon, GomokuIcon, MemoryMatchIcon, LudoIcon } from './GameIcons.jsx';
+import { adminService } from '../services/adminService.js';
+
+// Hover Connected Flyout Tooltip for Collapsed Sidebar
+function FlyoutTooltip({ title, subtitle, badge, badgeColor = 'blue' }) {
+  return (
+    <div className="sidebar-flyout-tooltip">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontWeight: '800', color: '#18181B', fontSize: '12px' }}>{title}</span>
+        {badge && (
+          <span style={{
+            fontSize: '9px',
+            fontWeight: '800',
+            fontFamily: 'var(--font-mono)',
+            padding: '1px 5px',
+            borderRadius: '4px',
+            background: badgeColor === 'amber' ? '#FEF3C7' : badgeColor === 'green' ? '#DCFCE7' : '#EFF6FF',
+            color: badgeColor === 'amber' ? '#B45309' : badgeColor === 'green' ? '#15803D' : '#1D4ED8',
+            border: badgeColor === 'amber' ? '1px solid #FDE68A' : badgeColor === 'green' ? '1px solid #BBF7D0' : '1px solid #BFDBFE'
+          }}>
+            {badge}
+          </span>
+        )}
+      </div>
+      {subtitle && (
+        <span style={{ fontSize: '10px', color: '#71717A', fontFamily: 'var(--font-mono)', fontWeight: '600' }}>
+          {subtitle}
+        </span>
+      )}
+    </div>
+  );
+}
+
 
 export default function DesktopAppSidebar({
+  isExpanded: controlledExpanded,
+  onToggleExpand,
+  activeGameId,
+  activePage,
   profile,
   onSelectGame,
   onStartQuickMatch,
   onOpenProfile,
-  onOpenStats,
   onOpenSettings,
   onOpenLeaderboard,
+  onOpenAdmin,
+  onLogout,
+  onNavigateToAuth,
   onJoinPrivateRoom
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [localExpanded, setLocalExpanded] = useState(true);
+  const isExpanded = controlledExpanded !== undefined ? controlledExpanded : localExpanded;
   const [quickJoinCode, setQuickJoinCode] = useState('');
   const [joinSelectedGame, setJoinSelectedGame] = useState('connect4');
 
-  const currentAvatar = AVATARS.find(a => a.id === profile?.avatarId) || AVATARS[0];
-  const tier = getTier(profile?.rating || 1200);
-
   const totalMatches = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
+  const currentAvatar = AVATARS.find(a => a.id === profile?.avatarId) || AVATARS[0];
+  const tier = getTier(profile?.rating || 1200, totalMatches);
   const winRate = totalMatches > 0 ? Math.round(((profile?.wins || 0) / totalMatches) * 100) : 0;
   const currentXp = (profile?.xp || 0) % 100;
 
   const GAMES = [
-    { 
-      id: 'connect4', 
-      title: 'Connect 4', 
-      tag: '7×6 GRID', 
-      badge: 'POPULAR',
-      badgeColor: '#38bdf8',
-      icon: ConnectFourIcon,
-      color: '#38bdf8' 
-    },
-    { 
-      id: 'tictactoe', 
-      title: 'Tic Tac Toe', 
-      tag: '3×3 FAST', 
-      badge: 'BLITZ',
-      badgeColor: '#f43f5e',
-      icon: TicTacToeIcon,
-      color: '#f43f5e' 
-    },
-    { 
-      id: 'gomoku', 
-      title: 'Gomoku', 
-      tag: '15×15 PRO', 
-      badge: 'STRATEGY',
-      badgeColor: '#10b981',
-      icon: GomokuIcon,
-      color: '#10b981' 
-    }
+    { id: 'connect4', title: 'Connect 4', tag: '7×6 GRID', badge: 'POPULAR', icon: ConnectFourIcon },
+    { id: 'tictactoe', title: 'Tic Tac Toe', tag: '3×3 FAST', badge: 'BLITZ', icon: TicTacToeIcon },
+    { id: 'gomoku', title: 'Gomoku', tag: '15×15 PRO', badge: 'STRATEGY', icon: GomokuIcon },
+    { id: 'memory', title: 'Memory Match', tag: '5 LEVELS', badge: 'SOLO', icon: MemoryMatchIcon },
+    { id: 'ludo', title: 'Ludo', tag: '2-4 PLAYERS', badge: 'CLASSIC', icon: LudoIcon }
   ];
 
   const handleDirectJoinSubmit = (e) => {
@@ -68,453 +84,334 @@ export default function DesktopAppSidebar({
 
   const toggleSidebar = () => {
     soundSynth.playRotate();
-    setIsExpanded(prev => !prev);
+    if (onToggleExpand) {
+      onToggleExpand();
+    } else {
+      setLocalExpanded(prev => !prev);
+    }
   };
 
   return (
     <aside
-      className="desktop-only"
+      className="desktop-only desktop-fixed-sidebar"
       style={{
-        width: isExpanded ? '250px' : '68px',
-        minWidth: isExpanded ? '250px' : '68px',
+        width: isExpanded ? '260px' : '72px',
+        minWidth: isExpanded ? '260px' : '72px',
         height: '100vh',
-        position: 'sticky',
+        position: 'fixed',
         top: 0,
         left: 0,
-        background: 'linear-gradient(180deg, #0b1329 0%, #090e1f 100%)',
-        color: '#f8fafc',
-        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '6px 0 25px rgba(0, 0, 0, 0.35)',
+        background: '#F4F4F5',
+        color: '#18181B',
+        borderRight: '1px solid #E4E4E7',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        padding: isExpanded ? '14px 14px 18px' : '14px 8px 18px',
+        padding: isExpanded ? '12px 12px 14px' : '12px 8px 14px',
         boxSizing: 'border-box',
-        zIndex: 100,
-        transition: 'width 0.28s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.28s cubic-bezier(0.16, 1, 0.3, 1), padding 0.28s ease',
+        zIndex: 90,
+        transition: 'width 0.25s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s ease',
         flexShrink: 0,
-        userSelect: 'none'
+        userSelect: 'none',
+        overflow: isExpanded ? 'hidden' : 'visible'
       }}
     >
-      {/* TOP SECTION: Top-Left Toggle + User Profile + Navigation + Games */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', overflow: 'hidden' }}>
-        
-        {/* Top Header Row with Toggle on the Top Left */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: isExpanded ? 'space-between' : 'center',
-          paddingBottom: '2px'
-        }}>
-          {isExpanded ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                onClick={toggleSidebar}
-                title="Collapse sidebar"
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '8px',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#cbd5e1',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#ffffff';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#cbd5e1';
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                }}
-              >
-                <PanelLeftClose size={16} />
-              </button>
-              <span style={{
-                fontFamily: 'var(--font-heading)',
-                fontSize: '12px',
-                fontWeight: '900',
-                color: '#94a3b8',
-                letterSpacing: '0.06em'
-              }}>
-                CYBER ARCADE
-              </span>
-            </div>
-          ) : (
+      {/* 1. TOP HEADER (Toggle Button & Brand) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center', paddingBottom: '10px', borderBottom: '1px solid #E4E4E7', flexShrink: 0 }}>
+        {isExpanded ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
               onClick={toggleSidebar}
-              title="Expand sidebar"
+              title="Collapse sidebar"
               style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.06)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                color: '#cbd5e1',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
+                width: '28px', height: '28px', borderRadius: '8px',
+                background: '#FFFFFF', border: '1px solid #E4E4E7',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#52525B', cursor: 'pointer', transition: 'all 0.15s ease'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#ffffff';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = '#cbd5e1';
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+            >
+              <PanelLeftClose size={15} />
+            </button>
+            <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: '#18181B', letterSpacing: '-0.01em' }}>
+              games4u
+            </span>
+
+          </div>
+        ) : (
+          <div className="sidebar-item-wrapper">
+            <button
+              onClick={toggleSidebar}
+              style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: '#FFFFFF', border: '1px solid #E4E4E7',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#52525B', cursor: 'pointer'
               }}
             >
               <PanelLeftOpen size={16} />
             </button>
-          )}
-        </div>
+            <FlyoutTooltip title="Expand Sidebar" />
+          </div>
+        )}
+      </div>
 
-        {/* 1. Advanced Profile Card */}
+      {/* 2. MIDDLE SCROLLABLE CONTAINER */}
+      <div 
+        style={{
+          flex: 1, minHeight: 0, overflowY: isExpanded ? 'auto' : 'visible', overflowX: 'visible',
+          padding: '10px 0', display: 'flex', flexDirection: 'column', gap: '14px',
+          scrollbarWidth: 'none', msOverflowStyle: 'none'
+        }}
+      >
+
+        {/* User Card */}
         {isExpanded ? (
           <div style={{
-            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '14px',
-            padding: '12px',
-
-            boxSizing: 'border-box',
+            background: activePage === 'profile' ? '#FFFFFF' : '#FFFFFF',
+            border: activePage === 'profile' ? '1.5px solid #2563EB' : '1px solid #E4E4E7',
+            borderRadius: '12px',
+            padding: '10px',
+            boxShadow: activePage === 'profile' ? '0 0 0 1px #2563EB, 0 2px 6px rgba(37,99,235,0.08)' : '0 1px 2px rgba(0,0,0,0.03)',
             position: 'relative',
-            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.2)'
+            transition: 'all 0.15s ease'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <div
                 onClick={onOpenProfile}
-                style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer', flex: 1, minWidth: 0 }}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1, minWidth: 0 }}
               >
-                {/* Avatar with Glow */}
                 <div style={{
-                  width: '36px', height: '36px', borderRadius: '10px',
-                  background: currentAvatar.color, color: '#ffffff',
+                  width: '34px', height: '34px', borderRadius: '8px',
+                  background: activePage === 'profile' ? '#2563EB' : '#18181B', color: '#FFFFFF',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'var(--font-heading)', fontSize: '14px', fontWeight: '900',
-                  flexShrink: 0,
-                  boxShadow: `0 0 10px ${currentAvatar.color}88`
+                  fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800',
+                  flexShrink: 0
                 }}>
-                  {profile?.name ? profile.name[0].toUpperCase() : 'P'}
+                  {profile?.hasCustomName && profile?.name ? profile.name[0].toUpperCase() : 'G'}
                 </div>
 
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span style={{
-                      fontSize: '13px', fontWeight: '900', color: '#ffffff',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                    }}>
-                      {profile?.name || 'Player'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: '#18181B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {profile?.hasCustomName ? profile.name : 'Guest'}
                     </span>
                     <span style={{
-                      fontSize: '8px', fontWeight: '900', padding: '1px 4px',
-                      borderRadius: '4px', background: 'rgba(255, 255, 255, 0.12)', color: '#38bdf8',
+                      fontSize: '8px', fontWeight: '700', padding: '1px 4px',
+                      borderRadius: '4px', background: '#F4F4F5', color: '#52525B',
                       fontFamily: 'var(--font-mono)'
                     }}>
-                      {tier.badge}
+                      {tier.name}
                     </span>
                   </div>
 
-                  <div style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-mono)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <strong style={{ color: '#ffffff' }}>{profile?.rating || 1200}</strong> ELO • Lv {profile?.level || 1}
+                  <div style={{ fontSize: '10px', color: '#71717A', fontFamily: 'var(--font-mono)', marginTop: '1px' }}>
+                    <strong style={{ color: '#18181B' }}>{profile?.rating || 1200}</strong> ELO
                   </div>
                 </div>
               </div>
 
-              {/* Settings Gear */}
               <button
                 onClick={onOpenSettings}
                 title="Settings & Audio"
                 style={{
-                  width: '28px', height: '28px', borderRadius: '7px',
-                  background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(255, 255, 255, 0.1)',
+                  width: '26px', height: '26px', borderRadius: '6px',
+                  background: activePage === 'rules' || activePage === 'settings' ? '#2563EB' : '#F4F4F5',
+                  border: '1px solid #E4E4E7',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#94a3b8', cursor: 'pointer', flexShrink: 0,
-                  transition: 'all 0.15s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#ffffff';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#94a3b8';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  color: activePage === 'rules' || activePage === 'settings' ? '#FFFFFF' : '#71717A',
+                  cursor: 'pointer'
                 }}
               >
-                <Settings size={14} />
+                <Settings size={13} />
               </button>
-            </div>
-
-            {/* XP Progress Indicator */}
-            <div style={{ marginTop: '9px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: 'var(--font-mono)', color: '#94a3b8', marginBottom: '3px' }}>
-                <span>XP {currentXp}/100</span>
-                <span>Lv {profile?.level || 1}</span>
-              </div>
-              <div style={{ width: '100%', height: '4px', borderRadius: '2px', background: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden' }}>
-                <div style={{
-                  width: `${currentXp}%`,
-                  height: '100%',
-                  background: 'linear-gradient(90deg, #38bdf8 0%, #818cf8 100%)',
-                  borderRadius: '2px'
-                }} />
-              </div>
             </div>
           </div>
         ) : (
-          /* Collapsed Mode */
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+          <div className="sidebar-item-wrapper">
             <button
               onClick={onOpenProfile}
-              title={`${profile?.name || 'Player'} (${profile?.rating || 1200} ELO)`}
               style={{
                 width: '36px', height: '36px', borderRadius: '10px',
-                background: currentAvatar.color, color: '#ffffff',
+                background: activePage === 'profile' ? '#2563EB' : '#18181B', color: '#FFFFFF',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-heading)', fontSize: '14px', fontWeight: '900',
-                border: 'none', cursor: 'pointer',
-                boxShadow: `0 0 10px ${currentAvatar.color}88`
+                fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800',
+                border: activePage === 'profile' ? '2px solid #2563EB' : 'none',
+                cursor: 'pointer', margin: '0 auto'
               }}
             >
-              {profile?.name ? profile.name[0].toUpperCase() : 'P'}
+              {profile?.hasCustomName && profile?.name ? profile.name[0].toUpperCase() : 'G'}
             </button>
-
-            <button
-              onClick={onOpenSettings}
-              title="Settings & Audio"
-              style={{
-                width: '30px', height: '30px', borderRadius: '7px',
-                background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(255, 255, 255, 0.1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#94a3b8', cursor: 'pointer'
-              }}
-            >
-              <Settings size={14} />
-            </button>
+            <FlyoutTooltip
+              title={profile?.hasCustomName ? profile.name : 'Guest Competitor'}
+              subtitle={`${profile?.rating || 1200} ELO • ${tier.name}`}
+              badge={tier.name}
+            />
           </div>
         )}
 
-        {/* 2. Section: COMPETITIVE ARENA */}
+        {/* Section: COMPETITIVE */}
         <div>
           {isExpanded && (
-            <div style={{
-              fontSize: '10px', fontWeight: '800', color: '#64748b',
-              letterSpacing: '0.06em', marginBottom: '6px', paddingLeft: '4px',
-              display: 'flex', alignItems: 'center', gap: '4px'
-            }}>
-              <Compass size={11} color="#64748b" />
-              <span>COMPETITIVE</span>
+            <div style={{ fontSize: '9px', fontWeight: '700', color: '#A1A1AA', letterSpacing: '0.06em', marginBottom: '4px', paddingLeft: '4px' }}>
+              COMPETITIVE
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: isExpanded ? 'stretch' : 'center' }}>
-            {/* Global Leaderboard */}
-            <button
-              onClick={onOpenLeaderboard}
-              title="Global Tournament Leaderboard"
-              style={{
-                width: isExpanded ? '100%' : '36px',
-                height: isExpanded ? 'auto' : '36px',
-                padding: isExpanded ? '8px 10px' : '0',
-                borderRadius: '10px',
-                background: 'transparent',
-                border: '1px solid transparent',
-                color: '#cbd5e1',
-                display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center',
-                fontSize: '12px', fontWeight: '800', cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
-                e.currentTarget.style.color = '#ffffff';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'transparent';
-                e.currentTarget.style.color = '#cbd5e1';
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                <Trophy size={16} color="#f59e0b" />
-                {isExpanded && <span>Leaderboard</span>}
-              </div>
-              {isExpanded && (
-                <span style={{
-                  fontSize: '9px', fontWeight: '800', padding: '1px 5px',
-                  borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24',
-                  fontFamily: 'var(--font-mono)'
-                }}>
-                  TOP 50
-                </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <div className={isExpanded ? '' : 'sidebar-item-wrapper'}>
+              <button
+                onClick={onOpenLeaderboard}
+                style={{
+                  width: '100%', padding: isExpanded ? '7px 8px' : '7px 0',
+                  borderRadius: '8px',
+                  background: activePage === 'leaderboard' ? '#FFFFFF' : 'transparent',
+                  border: activePage === 'leaderboard' ? '1px solid #E4E4E7' : '1px solid transparent',
+                  color: activePage === 'leaderboard' ? '#2563EB' : '#52525B',
+                  display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center',
+                  fontSize: '12px', fontWeight: activePage === 'leaderboard' ? '700' : '600', cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Trophy size={15} color={activePage === 'leaderboard' ? '#2563EB' : '#52525B'} />
+                  {isExpanded && <span>Leaderboard</span>}
+                </div>
+                {isExpanded && (
+                  <span style={{ fontSize: '9px', fontWeight: '700', padding: '1px 4px', borderRadius: '4px', background: '#E4E4E7', color: '#52525B', fontFamily: 'var(--font-mono)' }}>
+                    TOP 50
+                  </span>
+                )}
+              </button>
+              {!isExpanded && (
+                <FlyoutTooltip title="Leaderboard" subtitle="Top 50 Global Rankings" badge="TOP 50" badgeColor="amber" />
               )}
-            </button>
-
-            {/* Career Stats */}
-            <button
-              onClick={onOpenStats}
-              title={`Career Statistics (${winRate}% Win Rate)`}
-              style={{
-                width: isExpanded ? '100%' : '36px',
-                height: isExpanded ? 'auto' : '36px',
-                padding: isExpanded ? '8px 10px' : '0',
-                borderRadius: '10px',
-                background: 'transparent',
-                border: '1px solid transparent',
-                color: '#cbd5e1',
-                display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center',
-                fontSize: '12px', fontWeight: '800', cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
-                e.currentTarget.style.color = '#ffffff';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'transparent';
-                e.currentTarget.style.color = '#cbd5e1';
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                <BarChart3 size={16} color="#38bdf8" />
-                {isExpanded && <span>Career Stats</span>}
-              </div>
-              {isExpanded && (
-                <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '900', fontFamily: 'var(--font-mono)' }}>
-                  {winRate}% WR
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* 3. Section: TOURNAMENT GAMES */}
-        <div>
-          {isExpanded && (
-            <div style={{
-              fontSize: '10px', fontWeight: '800', color: '#64748b',
-              letterSpacing: '0.06em', marginBottom: '6px', paddingLeft: '4px',
-              display: 'flex', alignItems: 'center', gap: '4px'
-            }}>
-              <Flame size={11} color="#64748b" />
-              <span>GAMES DIRECTORY</span>
             </div>
-          )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: isExpanded ? 'stretch' : 'center' }}>
-            {GAMES.map((g) => {
-              const IconComp = g.icon;
-
-              return (
+            {adminService.isAdmin(profile) && (
+              <div className={isExpanded ? '' : 'sidebar-item-wrapper'}>
                 <button
-                  key={g.id}
-                  onClick={() => {
-                    if (onSelectGame) onSelectGame(g.id);
-                    else onStartQuickMatch(g.id, g.title);
-                  }}
-                  title={`Play ${g.title} (${g.tag})`}
+                  onClick={onOpenAdmin}
                   style={{
-                    width: isExpanded ? '100%' : '36px',
-                    height: isExpanded ? 'auto' : '36px',
-                    padding: isExpanded ? '8px 10px' : '0',
-                    borderRadius: '10px',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                    color: '#e2e8f0',
+                    width: '100%', padding: isExpanded ? '7px 8px' : '7px 0',
+                    borderRadius: '8px',
+                    background: activePage === 'admin' ? '#2563EB' : '#EFF6FF',
+                    border: activePage === 'admin' ? '1px solid #2563EB' : '1px solid #BFDBFE',
+                    color: activePage === 'admin' ? '#FFFFFF' : '#2563EB',
                     display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center',
-                    fontSize: '12px', fontWeight: '800', cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.09)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.18)';
-                    e.currentTarget.style.color = '#ffffff';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.color = '#e2e8f0';
+                    fontSize: '12px', fontWeight: '700', cursor: 'pointer'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-                    <div style={{
-                      width: '24px', height: '24px', borderRadius: '6px',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <IconComp size={15} />
-                    </div>
-                    {isExpanded && <span>{g.title}</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldCheck size={15} color={activePage === 'admin' ? '#FFFFFF' : '#2563EB'} />
+                    {isExpanded && <span>Admin Backoffice</span>}
                   </div>
-
                   {isExpanded && (
-                    <span style={{
-                      fontSize: '8px', fontWeight: '900', padding: '2px 5px',
-                      borderRadius: '4px', background: `${g.badgeColor}22`,
-                      color: g.badgeColor, fontFamily: 'var(--font-mono)'
-                    }}>
-                      {g.badge}
+                    <span style={{ fontSize: '8px', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', background: activePage === 'admin' ? '#FFFFFF' : '#2563EB', color: activePage === 'admin' ? '#2563EB' : '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+                      PORTAL
                     </span>
                   )}
                 </button>
+                {!isExpanded && (
+                  <FlyoutTooltip title="Admin Backoffice" subtitle="Live Management Portal" badge="PORTAL" />
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+
+
+        {/* Section: GAMES DIRECTORY */}
+
+        <div>
+          {isExpanded && (
+            <div style={{ fontSize: '9px', fontWeight: '700', color: '#A1A1AA', letterSpacing: '0.06em', marginBottom: '4px', paddingLeft: '4px' }}>
+              GAMES DIRECTORY
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {GAMES.map((g) => {
+              const IconComp = g.icon;
+              const isActive = !activePage && activeGameId === g.id;
+
+              return (
+                <div key={g.id} className={isExpanded ? '' : 'sidebar-item-wrapper'}>
+                  <button
+                    onClick={() => {
+                      if (onSelectGame) onSelectGame(g.id);
+                      else onStartQuickMatch(g.id, g.title);
+                    }}
+                    style={{
+                      width: '100%', padding: isExpanded ? '7px 8px' : '7px 0',
+                      borderRadius: '8px',
+                      background: isActive ? '#FFFFFF' : 'transparent',
+                      border: isActive ? '1px solid #E4E4E7' : '1px solid transparent',
+                      color: isActive ? '#2563EB' : '#52525B',
+                      display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center',
+                      fontSize: '12px', fontWeight: isActive ? '700' : '600', cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <IconComp size={15} color={isActive ? '#2563EB' : '#52525B'} />
+                      {isExpanded && <span>{g.title}</span>}
+                    </div>
+                    {isExpanded && (
+                      <span style={{
+                        fontSize: '8px', fontWeight: '700', padding: '1px 4px',
+                        borderRadius: '4px',
+                        background: isActive ? '#EFF6FF' : '#F4F4F5',
+                        color: isActive ? '#2563EB' : '#71717A',
+                        fontFamily: 'var(--font-mono)'
+                      }}>
+                        {g.badge}
+                      </span>
+                    )}
+                  </button>
+                  {!isExpanded && (
+                    <FlyoutTooltip title={g.title} subtitle={g.tag} badge={g.badge} />
+                  )}
+                </div>
               );
             })}
           </div>
         </div>
       </div>
 
-      {/* BOTTOM SECTION: Join Room Hub & Real-time Status */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* 3. BOTTOM SECTION: Private Room Quick Join */}
+      <div style={{ paddingTop: '8px', borderTop: '1px solid #E4E4E7', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
         {isExpanded ? (
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.09)',
-            borderRadius: '14px',
-            padding: '12px',
-            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.2)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <KeyRound size={13} color="#38bdf8" />
-                <span style={{ fontSize: '10px', fontWeight: '900', color: '#ffffff', letterSpacing: '0.04em' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '10px', padding: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <KeyRound size={12} color="#2563EB" />
+                <span style={{ fontSize: '10px', fontWeight: '800', color: '#18181B' }}>
                   PRIVATE ROOM
                 </span>
               </div>
 
               {/* Game Selector Pills */}
-              <div style={{ display: 'flex', gap: '3px' }}>
-                {['connect4', 'tictactoe', 'gomoku'].map((gKey) => (
+              <div style={{ display: 'flex', gap: '2px' }}>
+                {['connect4', 'tictactoe', 'gomoku', 'memory', 'ludo'].map((gKey) => (
                   <button
                     key={gKey}
                     type="button"
                     onClick={() => setJoinSelectedGame(gKey)}
                     style={{
-                      padding: '1px 4px',
-                      borderRadius: '3px',
-                      fontSize: '8px',
-                      fontWeight: '800',
+                      padding: '1px 3px', borderRadius: '3px', fontSize: '8px', fontWeight: '700',
                       border: 'none',
-                      background: joinSelectedGame === gKey ? '#38bdf8' : 'rgba(255, 255, 255, 0.08)',
-                      color: joinSelectedGame === gKey ? '#0f172a' : '#94a3b8',
+                      background: joinSelectedGame === gKey ? '#2563EB' : '#F4F4F5',
+                      color: joinSelectedGame === gKey ? '#FFFFFF' : '#71717A',
                       cursor: 'pointer'
                     }}
                   >
-                    {gKey === 'connect4' ? 'C4' : gKey === 'tictactoe' ? 'TTT' : 'GMK'}
+                    {gKey === 'connect4' ? 'C4' : gKey === 'tictactoe' ? 'TTT' : gKey === 'gomoku' ? 'GMK' : gKey === 'memory' ? 'MEM' : 'LUD'}
                   </button>
                 ))}
               </div>
             </div>
 
-            <form onSubmit={handleDirectJoinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <form onSubmit={handleDirectJoinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <input
                 type="text"
                 maxLength={6}
@@ -522,73 +419,158 @@ export default function DesktopAppSidebar({
                 onChange={(e) => setQuickJoinCode(e.target.value.toUpperCase())}
                 placeholder="6-LETTER CODE"
                 style={{
-                  width: '100%', padding: '7px', borderRadius: '7px',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  fontSize: '12px', fontWeight: '900',
+                  width: '100%', padding: '6px', borderRadius: '6px',
+                  border: '1px solid #E4E4E7', fontSize: '11px', fontWeight: '700',
                   letterSpacing: '2px', textAlign: 'center', fontFamily: 'var(--font-mono)',
-                  outline: 'none', background: 'rgba(0, 0, 0, 0.35)', color: '#38bdf8', boxSizing: 'border-box'
+                  outline: 'none', background: '#FAFAFA', color: '#18181B', boxSizing: 'border-box'
                 }}
               />
 
               <button
                 type="submit"
                 disabled={quickJoinCode.trim().length < 4}
+                className="btn-primary"
                 style={{
-                  padding: '7px', borderRadius: '7px', fontSize: '11px', fontWeight: '900',
-                  background: '#ffffff',
-                  color: '#0f172a', border: 'none', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                  opacity: quickJoinCode.trim().length >= 4 ? 1 : 0.4,
-                  transition: 'all 0.15s ease'
+                  padding: '6px', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
+                  opacity: quickJoinCode.trim().length >= 4 ? 1 : 0.4
                 }}
               >
-                <span>ENTER ROOM</span>
-                <ArrowRight size={12} />
+                <span>JOIN ROOM</span>
+                <ArrowRight size={11} />
               </button>
             </form>
           </div>
         ) : (
-          <button
-            onClick={() => onJoinPrivateRoom('connect4')}
-            title="Join Private Match with Code"
-            style={{
-              width: '36px', height: '36px', borderRadius: '10px',
-              background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(255, 255, 255, 0.1)',
-              color: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', margin: '0 auto',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = '#ffffff';
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = '#cbd5e1';
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-            }}
-          >
-            <KeyRound size={16} color="#38bdf8" />
-          </button>
+          <div className="sidebar-item-wrapper">
+            <button
+              onClick={() => onJoinPrivateRoom('connect4')}
+              style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: '#FFFFFF', border: '1px solid #E4E4E7',
+                color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', margin: '0 auto'
+              }}
+            >
+              <KeyRound size={15} />
+            </button>
+            <FlyoutTooltip title="Private Room" subtitle="Enter match code" badge="CUSTOM" />
+          </div>
         )}
 
-        {/* Real-time Security & Engine Status */}
+        {/* Real-time Status */}
         {isExpanded && (
-          <div style={{
-            fontSize: '10px', color: '#64748b', fontFamily: 'var(--font-mono)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '8px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <ShieldCheck size={12} color="#10b981" />
-              <span style={{ color: '#94a3b8' }}>Anti-Cheat</span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '9px', color: '#71717A', fontFamily: 'var(--font-mono)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <ShieldCheck size={11} color="#16A34A" />
+              <span>Anti-Cheat Engine</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontWeight: '800' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#16A34A', fontWeight: '700' }}>
+              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#16A34A' }} />
               <span>ACTIVE</span>
             </div>
           </div>
         )}
+
+        {/* 4. FOOTER: Account Auth Action (Sign Out / Log In) */}
+        {!profile?.isGuest && profile?.email ? (
+          isExpanded ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 8px',
+              background: '#FFFFFF',
+              border: '1px solid #E4E4E7',
+              borderRadius: '8px',
+              gap: '6px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16A34A', flexShrink: 0 }} />
+                <span style={{ fontSize: '11px', color: '#52525B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '500' }}>
+                  {profile.email}
+                </span>
+              </div>
+              <button
+                onClick={onLogout}
+                title="Sign Out"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#DC2626',
+                  cursor: 'pointer',
+                  padding: '3px 6px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  flexShrink: 0
+                }}
+              >
+                <LogOut size={12} />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          ) : (
+            <div className="sidebar-item-wrapper">
+              <button
+                onClick={onLogout}
+                style={{
+                  width: '36px', height: '36px', borderRadius: '10px',
+                  background: '#FFFFFF', border: '1px solid #E4E4E7',
+                  color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', margin: '0 auto'
+                }}
+              >
+                <LogOut size={15} />
+              </button>
+              <FlyoutTooltip title="Sign Out" subtitle={profile.email} badgeColor="red" />
+            </div>
+          )
+        ) : (
+          isExpanded ? (
+            <button
+              onClick={() => onNavigateToAuth ? onNavigateToAuth('login') : onOpenProfile()}
+              style={{
+                width: '100%',
+                padding: '7px 10px',
+                borderRadius: '8px',
+                background: '#2563EB',
+                border: 'none',
+                color: '#FFFFFF',
+                fontSize: '11px',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              <LogIn size={13} />
+              <span>Log In / Sign Up</span>
+            </button>
+          ) : (
+            <div className="sidebar-item-wrapper">
+              <button
+                onClick={() => onNavigateToAuth ? onNavigateToAuth('login') : onOpenProfile()}
+                style={{
+                  width: '36px', height: '36px', borderRadius: '10px',
+                  background: '#2563EB', border: 'none',
+                  color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', margin: '0 auto'
+                }}
+              >
+                <LogIn size={15} />
+              </button>
+              <FlyoutTooltip title="Log In / Sign Up" subtitle="Save ratings & history" badge="FREE" />
+            </div>
+          )
+        )}
       </div>
+
     </aside>
   );
 }
+

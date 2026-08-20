@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, User, Bot, Wifi, Hash } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import { soundSynth } from '../utils/soundSynth.js';
+
 import { realtimeManager } from '../services/realtimeManager.js';
 import { gameEngineService } from '../services/gameEngineService.js';
 import { saveGameState, loadGameState } from '../utils/gameStateStorage.js';
@@ -9,7 +9,11 @@ import { getUserProfile } from '../utils/userProfile.js';
 import LiveEmojiReactionSystem from '../components/LiveEmojiReactionSystem.jsx';
 import { getSupabase } from '../utils/supabaseClient.js';
 import MatchPlayerBar from '../components/MatchPlayerBar.jsx';
-import MatchResultModal from '../components/MatchResultModal.jsx';
+import InGameResultBar from '../components/InGameResultBar.jsx';
+import InBoardVictoryBadge from '../components/InBoardVictoryBadge.jsx';
+
+
+
 
 const BOARD_SIZE = 15;
 const EMPTY = 0;
@@ -38,9 +42,10 @@ export default function GomokuGame({
   const isOnline = initialMode === 'ONLINE_MATCH' && !!onlineSession?.matchId;
   const turnTimeLimit = settings?.turnTimeLimit !== undefined ? settings.turnTimeLimit : 30;
 
-  const [initialState] = useState(() => loadGameState('gomoku', DEFAULT_GOMOKU_STATE));
+  const [initialState] = useState(() => isOnline ? DEFAULT_GOMOKU_STATE : loadGameState('gomoku', DEFAULT_GOMOKU_STATE));
 
   const [board, setBoard] = useState(initialState.board);
+
   const [currentPlayer, setCurrentPlayer] = useState(initialState.currentPlayer);
   const [gameMode] = useState(isOnline ? 'ONLINE_MATCH' : initialMode);
   const [myRole, setMyRole] = useState(onlineSession?.myRole === 'O' ? WHITE : BLACK);
@@ -62,10 +67,14 @@ export default function GomokuGame({
     xpGained: 0
   });
 
-  // Turn Clock
-  const [timeLeft, setTimeLeft] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(turnTimeLimit || 30);
   const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || { name: 'Opponent', avatarId: '2', rating: 1200 });
   const [incomingReaction, setIncomingReaction] = useState(null);
+  const [incomingChat, setIncomingChat] = useState(null);
+  const [rematchStatus, setRematchStatus] = useState('IDLE'); // 'IDLE' | 'OFFERED' | 'RECEIVED' | 'ACCEPTED' | 'DECLINED' | 'OPPONENT_LEFT'
+
+
+
 
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -122,7 +131,63 @@ export default function GomokuGame({
     return null;
   };
 
-  // Realtime Integration for Online Match
+  const scanBoardForWinner = (grid) => {
+    if (!grid || !Array.isArray(grid)) return null;
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const cell = grid[r]?.[c];
+        if (cell && cell !== EMPTY) {
+          const res = checkWin(grid, r, c, cell);
+          if (res?.winner && res.winner !== 'DRAW') return res;
+        }
+      }
+    }
+    const isFull = grid.every(row => row.every(cell => cell !== EMPTY));
+    if (isFull) return { winner: 'DRAW', stones: [] };
+    return null;
+  };
+
+  const disconnectIntervalRef = useRef(null);
+
+  const matchFinalizedRef = useRef(false);
+  const submitLockTimeoutRef = useRef(null);
+
+  // Idempotent Result Finalizer (Guarantees match result is processed ONCE and ONLY ONCE)
+  const handleFinalizeMatch = useCallback((outcome, reason = '', winningStone = null) => {
+    if (matchFinalizedRef.current) return;
+    matchFinalizedRef.current = true;
+
+    const isWin = outcome === 'WIN';
+    const isDraw = outcome === 'DRAW';
+    const finalStone = winningStone || (isWin ? myRoleRef.current : (isDraw ? 'DRAW' : (myRoleRef.current === BLACK ? WHITE : BLACK)));
+    setWinner(finalStone);
+
+    const delta = isWin ? 16 : (isDraw ? 0 : -16);
+    const xp = isWin ? 30 : 10;
+
+    setResultModal({
+      outcome,
+      ratingDelta: delta,
+      xpGained: xp,
+      reason
+    });
+
+    if (isWin) {
+      soundSynth.playVictory();
+    } else if (!isDraw) {
+      soundSynth.playDefeat();
+    }
+
+    if (onMatchFinished) {
+      onMatchFinished('gomoku', outcome, opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent'));
+    }
+  }, [gameMode, onMatchFinished, opponentProfile?.name]);
+
+
+  const handleFinalizeMatchRef = useRef(handleFinalizeMatch);
+  handleFinalizeMatchRef.current = handleFinalizeMatch;
+
+  // Realtime Integration for Online Match (Subscribes ONCE per matchId)
   useEffect(() => {
     if (!isOnline || !onlineSession?.matchId) return;
 
@@ -137,12 +202,46 @@ export default function GomokuGame({
           setIncomingReaction({
             emoji: reactionData.emoji,
             sender: reactionData.sender,
+            senderId: reactionData.senderId,
             timestamp: Date.now()
           });
         }
       },
-      onStateUpdate: (serverState) => {
+      onQuickChat: (chatData) => {
+        if (chatData?.phrase) {
+          soundSynth.playBulbLight();
+          setIncomingChat({
+            phrase: chatData.phrase,
+            sender: chatData.sender,
+            senderId: chatData.senderId,
+            timestamp: Date.now()
+          });
+        }
+      },
 
+      onRematchOffer: (data) => {
+        setRematchStatus('RECEIVED');
+        try { soundSynth.playBulbLight(); } catch (e) {}
+      },
+
+      onRematchAccept: () => {
+        setRematchStatus('ACCEPTED');
+        setTimeout(() => {
+          resetGame();
+          setRematchStatus('IDLE');
+        }, 600);
+      },
+
+      onRematchDecline: () => {
+        setRematchStatus('DECLINED');
+      },
+
+      onPlayerLeft: () => {
+        setRematchStatus('OPPONENT_LEFT');
+        setConnectionStatus('OPPONENT_LEFT');
+      },
+
+      onStateUpdate: (serverState) => {
         if (!serverState) return;
         const incomingBoard = serverState.board_state || serverState.board;
         const rawTurn = serverState.current_turn || serverState.turn;
@@ -151,69 +250,84 @@ export default function GomokuGame({
         const winnerId = serverState.winner_id || serverState.winnerId;
 
         if (incomingBoard && Array.isArray(incomingBoard) && incomingBoard.length === BOARD_SIZE) {
-          setBoard(incomingBoard);
+          // Merge server board with local board so no stone is ever erased
+          const finalBoard = incomingBoard.map((row, r) =>
+            Array.isArray(row)
+              ? row.map((cell, c) => (cell !== EMPTY ? cell : (boardRef.current && boardRef.current[r] ? boardRef.current[r][c] : EMPTY)))
+              : []
+          );
+
+          setBoard(finalBoard);
           setCurrentPlayer(incomingTurn);
 
+          const winResult = scanBoardForWinner(finalBoard);
+          if (winResult?.stones && winResult.stones.length > 0) {
+            setWinningStones(winResult.stones);
+          }
+
           if (incomingResult && incomingResult !== 'ACTIVE') {
-            const isWin = incomingResult === 'WIN';
-            const winStone = isWin ? (winnerId === profile?.id ? myRoleRef.current : (myRoleRef.current === BLACK ? WHITE : BLACK)) : 'DRAW';
-            setWinner(winStone);
+            const isWin = incomingResult === 'WIN' || incomingResult === 'FINISHED';
+            const isMyWin = isWin && (
+              winnerId === profile?.id ||
+              serverState.winnerSymbol === myRoleRef.current ||
+              serverState.winner === myRoleRef.current ||
+              winResult?.winner === myRoleRef.current
+            );
+            const isDraw = incomingResult === 'DRAW' || winResult?.winner === 'DRAW';
+            const outcome = isMyWin ? 'WIN' : (isDraw ? 'DRAW' : 'LOSS');
+            const winStone = isWin ? (isMyWin ? myRoleRef.current : (myRoleRef.current === BLACK ? WHITE : BLACK)) : 'DRAW';
 
-            const outcome = winnerId === profile?.id ? 'WIN' : (incomingResult === 'DRAW' ? 'DRAW' : 'LOSS');
-            const delta = outcome === 'WIN' ? 16 : (outcome === 'DRAW' ? 0 : -16);
-
-            setResultModal({
-              isOpen: true,
-              outcome,
-              ratingDelta: delta,
-              xpGained: outcome === 'WIN' ? 30 : 10
-            });
-
-            if (onMatchFinished) {
-              onMatchFinished('gomoku', outcome, opponentProfile?.name || 'Opponent');
-            }
+            handleFinalizeMatchRef.current(outcome, '', winStone);
           }
         }
       },
+
       onOpponentDisconnect: () => {
+        if (disconnectIntervalRef.current) clearInterval(disconnectIntervalRef.current);
+
+        const isGameOver = !!(winnerRef.current || matchFinalizedRef.current);
+        let count = isGameOver ? 6 : 35;
         setConnectionStatus('OPPONENT_DISCONNECTED');
-        let count = 30;
         setDisconnectCountdown(count);
-        const timer = setInterval(() => {
+
+        disconnectIntervalRef.current = setInterval(() => {
           count -= 1;
           setDisconnectCountdown(count);
           if (count <= 0) {
-            clearInterval(timer);
-            setWinner(myRoleRef.current);
-            setResultModal({
-              isOpen: true,
-              outcome: 'WIN',
-              ratingDelta: 16,
-              xpGained: 30
-            });
-            if (onMatchFinished) {
-              onMatchFinished('gomoku', 'WIN', opponentProfile?.name || 'Opponent');
+            if (disconnectIntervalRef.current) {
+              clearInterval(disconnectIntervalRef.current);
+              disconnectIntervalRef.current = null;
+            }
+            setConnectionStatus('OPPONENT_LEFT');
+            setRematchStatus('OPPONENT_LEFT');
+            if (!isGameOver) {
+              handleFinalizeMatchRef.current('WIN', 'Opponent disconnected (Abandonment)');
             }
           }
         }, 1000);
       },
       onOpponentReconnect: () => {
+        if (disconnectIntervalRef.current) {
+          clearInterval(disconnectIntervalRef.current);
+          disconnectIntervalRef.current = null;
+        }
         setConnectionStatus('CONNECTED');
         setDisconnectCountdown(null);
+        setRematchStatus((prev) => (prev === 'OPPONENT_LEFT' ? 'IDLE' : prev));
       },
       onMatchAbandoned: () => {
-        setWinner(myRoleRef.current);
-        setResultModal({
-          isOpen: true,
-          outcome: 'WIN',
-          ratingDelta: 16,
-          xpGained: 30
-        });
-        if (onMatchFinished) {
-          onMatchFinished('gomoku', 'WIN', opponentProfile?.name || 'Opponent');
+        if (disconnectIntervalRef.current) {
+          clearInterval(disconnectIntervalRef.current);
+          disconnectIntervalRef.current = null;
+        }
+        setConnectionStatus('OPPONENT_LEFT');
+        setRematchStatus('OPPONENT_LEFT');
+        if (!winnerRef.current && !matchFinalizedRef.current) {
+          handleFinalizeMatchRef.current('WIN', 'Opponent abandoned the match');
         }
       }
     });
+
 
 
     // Refresh Recovery: Synchronize current authoritative match state & opponent profile
@@ -221,6 +335,9 @@ export default function GomokuGame({
       try {
         const supabase = getSupabase();
         if (supabase && matchId) {
+          let latestBoard = null;
+          let latestWinResult = null;
+
           const { data: stateData } = await supabase
             .from('game_states')
             .select('*')
@@ -233,20 +350,35 @@ export default function GomokuGame({
             const rawResult = stateData.status || stateData.result;
             const winnerId = stateData.winner_id || stateData.winnerId;
             if (rawBoard && Array.isArray(rawBoard) && rawBoard.length === BOARD_SIZE) {
-              setBoard(rawBoard);
+              const finalBoard = rawBoard.map((row, r) =>
+                Array.isArray(row)
+                  ? row.map((cell, c) => (cell !== EMPTY ? cell : (boardRef.current && boardRef.current[r] ? boardRef.current[r][c] : EMPTY)))
+                  : []
+              );
+
+              latestBoard = finalBoard;
+              setBoard(finalBoard);
               const incomingTurn = (rawTurn === 'X' || rawTurn === 'BLACK' || rawTurn === 'P1') ? BLACK : WHITE;
               setCurrentPlayer(incomingTurn);
+              latestWinResult = scanBoardForWinner(finalBoard);
+              if (latestWinResult?.stones && latestWinResult.stones.length > 0) {
+                setWinningStones(latestWinResult.stones);
+              }
               if (rawResult && rawResult !== 'ACTIVE') {
-                const isWin = rawResult === 'WIN';
-                const winStone = isWin ? (winnerId === profile?.id ? myRoleRef.current : (myRoleRef.current === BLACK ? WHITE : BLACK)) : 'DRAW';
-                setWinner(winStone);
+                const isWin = rawResult === 'WIN' || rawResult === 'FINISHED';
+                const isMyWin = isWin && (winnerId === profile?.id || stateData.winnerSymbol === myRoleRef.current || latestWinResult?.winner === myRoleRef.current);
+                const isDraw = rawResult === 'DRAW' || latestWinResult?.winner === 'DRAW';
+                const outcome = isMyWin ? 'WIN' : (isDraw ? 'DRAW' : 'LOSS');
+                const winStone = isWin ? (isMyWin ? myRoleRef.current : (myRoleRef.current === BLACK ? WHITE : BLACK)) : 'DRAW';
+                handleFinalizeMatchRef.current(outcome, '', winStone);
               }
             }
           }
 
+
           const { data: matchData } = await supabase
             .from('matches')
-            .select('player_1_id, player_2_id')
+            .select('*')
             .eq('id', matchId)
             .maybeSingle();
 
@@ -267,31 +399,105 @@ export default function GomokuGame({
                 });
               }
             }
+
+            if (matchData.result === 'FINISHED' || matchData.result === 'DRAW') {
+              const isMyWin = matchData.winner_id === profile?.id;
+              const isDraw = matchData.result === 'DRAW';
+              const outcome = isMyWin ? 'WIN' : (isDraw ? 'DRAW' : 'LOSS');
+              const winStone = isMyWin ? myRoleRef.current : (myRoleRef.current === BLACK ? WHITE : BLACK);
+              if (latestBoard) {
+                const wr = scanBoardForWinner(latestBoard);
+                if (wr?.stones && wr.stones.length > 0) {
+                  setWinningStones(wr.stones);
+                }
+              }
+              handleFinalizeMatchRef.current(outcome, '', winStone);
+            }
           }
         }
       } catch (e) {}
     }
 
+
     syncLatestState();
 
-    return () => {
-      realtimeManager.unsubscribe();
+    // Tab Visibility Re-Sync Handler
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncLatestState();
+      }
     };
-  }, [isOnline, onlineSession?.matchId, profile?.id, onGoHome]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (disconnectIntervalRef.current) {
+        clearInterval(disconnectIntervalRef.current);
+        disconnectIntervalRef.current = null;
+      }
+      if (submitLockTimeoutRef.current) {
+        clearTimeout(submitLockTimeoutRef.current);
+        submitLockTimeoutRef.current = null;
+      }
+      realtimeManager.leaveMatch(matchId);
+    };
+
+  }, [isOnline, onlineSession?.matchId, profile?.id]);
 
   const resetGame = useCallback(() => {
+    matchFinalizedRef.current = false;
     if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
     if (resultModalTimeoutRef.current) clearTimeout(resultModalTimeoutRef.current);
+    if (submitLockTimeoutRef.current) clearTimeout(submitLockTimeoutRef.current);
     setIsAiThinking(false);
+    setIsSubmittingMove(false);
     const emptyBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
     setBoard(emptyBoard);
     setCurrentPlayer(BLACK);
     setWinner(null);
     setWinningStones([]);
     setHistory([]);
+    setRematchStatus('IDLE');
     setTimeLeft(turnTimeLimit > 0 ? turnTimeLimit : 30);
     setResultModal({ isOpen: false, outcome: null, ratingDelta: 0, xpGained: 0 });
   }, [turnTimeLimit]);
+
+  const handleOfferRematch = useCallback(() => {
+    if (isOnline && onlineSession?.matchId) {
+      setRematchStatus('OFFERED');
+      realtimeManager.requestRematch(onlineSession.matchId, profile?.id, profile?.name || 'You');
+    } else {
+      resetGame();
+    }
+  }, [isOnline, onlineSession?.matchId, profile?.id, profile?.name, resetGame]);
+
+  const handleAcceptRematch = useCallback(async () => {
+    if (!isOnline || !onlineSession?.matchId) return;
+    setRematchStatus('ACCEPTED');
+    realtimeManager.acceptRematch(onlineSession.matchId, profile?.id);
+    const emptyBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
+    await gameEngineService.resetMatchState(onlineSession.matchId, emptyBoard, BLACK);
+    setTimeout(() => {
+      resetGame();
+      setRematchStatus('IDLE');
+    }, 600);
+  }, [isOnline, onlineSession?.matchId, profile?.id, resetGame]);
+
+  const handleDeclineRematch = useCallback(() => {
+    if (isOnline && onlineSession?.matchId) {
+      setRematchStatus('DECLINED');
+      realtimeManager.declineRematch(onlineSession.matchId, profile?.id);
+    }
+  }, [isOnline, onlineSession?.matchId, profile?.id]);
+
+  const handleGoHome = useCallback(() => {
+    if (isOnline && onlineSession?.matchId) {
+      realtimeManager.notifyPlayerLeft(onlineSession.matchId, profile?.id);
+      realtimeManager.leaveMatch(onlineSession.matchId);
+    }
+    if (onGoHome) onGoHome();
+  }, [isOnline, onlineSession?.matchId, profile?.id, onGoHome]);
+
 
   const handlePlaceStone = async (r, c) => {
     if (winner || board[r][c] !== EMPTY || isAiThinking || isSubmittingMove) return;
@@ -300,6 +506,12 @@ export default function GomokuGame({
       if (currentPlayer !== myRole) return;
 
       setIsSubmittingMove(true);
+      // Auto-unlock safety timeout
+      if (submitLockTimeoutRef.current) clearTimeout(submitLockTimeoutRef.current);
+      submitLockTimeoutRef.current = setTimeout(() => {
+        setIsSubmittingMove(false);
+      }, 3500);
+
       soundSynth.playRotate();
 
       // Optimistic instant board update
@@ -314,13 +526,24 @@ export default function GomokuGame({
       const isDraw = winResult?.winner === 'DRAW';
       const outcomeResult = isWin ? 'WIN' : (isDraw ? 'DRAW' : 'ACTIVE');
 
+      if (winResult?.stones && winResult.stones.length > 0) {
+        setWinningStones(winResult.stones);
+      }
+
       // Zero-latency broadcast to opponent (<10ms)
       realtimeManager.broadcastToMatch(onlineSession.matchId, 'match_move', {
         board: optimisticBoard,
         turn: nextTurn,
         result: outcomeResult,
-        winner_id: isWin ? profile?.id : null
+        winner_id: isWin ? profile?.id : null,
+        winnerSymbol: isWin ? myRole : null,
+        winningStones: winResult?.stones || [],
+        senderId: profile?.id
       });
+
+      if (isWin || isDraw) {
+        handleFinalizeMatch(outcomeResult === 'WIN' ? 'WIN' : 'DRAW', '', myRole);
+      }
 
       try {
         const movePayload = {
@@ -341,27 +564,20 @@ export default function GomokuGame({
           setCurrentPlayer((rawTurn === 'X' || rawTurn === 'BLACK' || rawTurn === 'P1') ? BLACK : WHITE);
 
           if (res.state.result && res.state.result !== 'ACTIVE') {
-            const isWinMatch = res.state.result === 'WIN';
-            setWinner(isWinMatch ? myRole : 'DRAW');
+            const isWinMatch = res.state.result === 'WIN' || res.state.result === 'FINISHED';
+            const isMyWin = isWinMatch && (res.state.winner_id === profile?.id || res.state.winnerSymbol === myRole);
+            const isDrawMatch = res.state.result === 'DRAW';
+            const outcome = isMyWin ? 'WIN' : (isDrawMatch ? 'DRAW' : 'LOSS');
+            const winStone = isWinMatch ? (isMyWin ? myRole : (myRole === BLACK ? WHITE : BLACK)) : 'DRAW';
 
-            const outcome = res.state.winner_id === profile?.id ? 'WIN' : (res.state.result === 'DRAW' ? 'DRAW' : 'LOSS');
-            const delta = outcome === 'WIN' ? 16 : (outcome === 'DRAW' ? 0 : -16);
-
-            setResultModal({
-              isOpen: true,
-              outcome,
-              ratingDelta: delta,
-              xpGained: outcome === 'WIN' ? 30 : 10
-            });
-
-            if (onMatchFinished) {
-              onMatchFinished('gomoku', outcome, opponentProfile?.name || 'Opponent');
-            }
+            handleFinalizeMatch(outcome, '', winStone);
           }
         }
       } catch (e) {
+
         console.error('[Gomoku Move Exception]:', e);
       } finally {
+        if (submitLockTimeoutRef.current) clearTimeout(submitLockTimeoutRef.current);
         setIsSubmittingMove(false);
       }
     } else {
@@ -369,59 +585,26 @@ export default function GomokuGame({
       soundSynth.playRotate();
       const newBoard = board.map(row => [...row]);
       newBoard[r][c] = currentPlayer;
-      const newHistory = [...historyRef.current, { r, c, player: currentPlayer }];
+      const newHistory = [...history, { r, c, player: currentPlayer }];
 
       setBoard(newBoard);
       setHistory(newHistory);
 
       const winResult = checkWin(newBoard, r, c, currentPlayer);
       if (winResult) {
-        setWinner(winResult.winner);
-        setWinningStones(winResult.stones);
-        soundSynth.playVictory();
+        setWinningStones(winResult.stones || []);
+        const isWin = winResult.winner === BLACK;
+        const isLoss = winResult.winner === WHITE;
+        const outcome = isWin ? 'WIN' : (isLoss ? 'LOSS' : 'DRAW');
 
-        let outcome = 'DRAW';
-        let delta = 2;
-        let xp = 15;
-
-        const updatedScores = { ...scores };
-        if (winResult.winner === BLACK) {
-          updatedScores.black = (updatedScores.black || 0) + 1;
-          outcome = 'WIN';
-          delta = 16;
-          xp = 30;
-        } else if (winResult.winner === WHITE) {
-          updatedScores.white = (updatedScores.white || 0) + 1;
-          outcome = gameMode === 'VS_COMPUTER' ? 'LOSS' : 'WIN';
-          delta = outcome === 'WIN' ? 16 : -10;
-          xp = outcome === 'WIN' ? 30 : 10;
-        } else {
-          updatedScores.draws = (updatedScores.draws || 0) + 1;
-        }
-
-        setScores(updatedScores);
-        if (winResult.winner !== 'DRAW' && outcome === 'WIN') {
-          try { confetti({ particleCount: 70, spread: 60, origin: { y: 0.65 } }); } catch (e) {}
-        }
-
-        if (onMatchFinished) {
-          onMatchFinished('gomoku', outcome, gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2');
-        }
-
-        resultModalTimeoutRef.current = setTimeout(() => {
-          setResultModal({
-            isOpen: true,
-            outcome,
-            ratingDelta: delta,
-            xpGained: xp
-          });
-        }, 450);
+        handleFinalizeMatch(outcome, '', winResult.winner);
       } else {
         const nextPlayer = currentPlayer === BLACK ? WHITE : BLACK;
         setCurrentPlayer(nextPlayer);
       }
     }
   };
+
 
   // Smart Gomoku AI
   useEffect(() => {
@@ -479,64 +662,62 @@ export default function GomokuGame({
     }
   }, [currentPlayer, gameMode, winner]);
 
-  // Active Turn Countdown Timer & Timeout Forfeit Handler
+  // Active Turn Countdown Timer with Monotonic Timestamps
   useEffect(() => {
     if (winner || turnTimeLimit <= 0) return;
 
     setTimeLeft(turnTimeLimit);
+    const turnEndTime = Date.now() + (turnTimeLimit * 1000);
 
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          // Handle Timeout
-          if (isOnline) {
-            const myTurnNow = (currentPlayer === myRole);
-            if (myTurnNow) {
-              setWinner(myRole === BLACK ? WHITE : BLACK);
-              setResultModal({
-                isOpen: true,
-                outcome: 'LOSS',
-                ratingDelta: -16,
-                xpGained: 10,
-                reason: 'Turn time expired'
-              });
-            } else {
-              setWinner(myRole);
-              setResultModal({
-                isOpen: true,
-                outcome: 'WIN',
-                ratingDelta: 16,
-                xpGained: 30,
-                reason: 'Opponent timed out'
-              });
+      const remainingSec = Math.ceil((turnEndTime - Date.now()) / 1000);
+      setTimeLeft(Math.max(0, remainingSec));
+
+      if (isOnline) {
+        const myTurnNow = (currentPlayer === myRole);
+        if (myTurnNow) {
+          if (remainingSec <= 0) {
+            clearInterval(timer);
+            let placed = false;
+            for (let r = 0; r < BOARD_SIZE && !placed; r++) {
+              for (let c = 0; c < BOARD_SIZE && !placed; c++) {
+                if (boardRef.current[r][c] === EMPTY) {
+                  handlePlaceStone(r, c);
+                  placed = true;
+                }
+              }
             }
-          } else if (gameMode === 'VS_COMPUTER') {
+            if (!placed) {
+              handleFinalizeMatch('LOSS', 'Turn time expired');
+            }
+          }
+        } else {
+          // Opponent's turn: 6-second grace buffer past 0
+          if (remainingSec <= -6) {
+            clearInterval(timer);
+            handleFinalizeMatch('WIN', 'Opponent timed out');
+          }
+        }
+      } else {
+        if (remainingSec <= 0) {
+          clearInterval(timer);
+          if (gameMode === 'VS_COMPUTER') {
             if (currentPlayer === BLACK) {
-              setWinner(WHITE);
-              setResultModal({
-                isOpen: true,
-                outcome: 'LOSS',
-                ratingDelta: -10,
-                xpGained: 10
-              });
+              handleFinalizeMatch('LOSS', 'Turn time expired');
             }
           } else if (gameMode === 'LOCAL_2P') {
             setWinner(currentPlayer === BLACK ? WHITE : BLACK);
           }
-          return 0;
         }
+      }
 
-        // Warning tick on last 5 seconds
-        if (prev <= 5) {
-          try { soundSynth.playRotate(); } catch (e) {}
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      if (remainingSec <= 5 && remainingSec > 0) {
+        try { soundSynth.playRotate(); } catch (e) {}
+      }
+    }, 500);
 
     return () => clearInterval(timer);
-  }, [currentPlayer, winner, turnTimeLimit, isOnline, gameMode, myRole]);
+  }, [currentPlayer, winner, turnTimeLimit, isOnline, gameMode, myRole, handleFinalizeMatch]);
 
   const isMyTurn = isOnline ? (currentPlayer === myRole) : (gameMode === 'LOCAL_2P' || currentPlayer === BLACK);
 
@@ -606,14 +787,6 @@ export default function GomokuGame({
             <span>{showMoveNumbers ? 'HIDE #' : 'SHOW #'}</span>
           </button>
 
-          {isOnline && (
-            <LiveEmojiReactionSystem
-              matchId={onlineSession?.matchId}
-              isOnline={isOnline}
-              playerName={profile?.name}
-            />
-          )}
-
           {!isOnline && (
             <button
               className="btn-secondary"
@@ -628,31 +801,30 @@ export default function GomokuGame({
         </div>
       </div>
 
-      {/* Disconnect Alert Banner (30s Grace Period) */}
-      {connectionStatus === 'OPPONENT_DISCONNECTED' && (
+      {/* Disconnect Alert Banner (During active game only) */}
+      {!winner && !matchFinalizedRef.current && connectionStatus === 'OPPONENT_DISCONNECTED' && (
         <div style={{
-          width: '100%', background: '#fffbeb', border: '1.5px solid #f59e0b',
+          width: '100%', background: '#FFFBEB', border: '1.5px solid #F59E0B',
           borderRadius: '12px', padding: '8px 14px', marginBottom: '8px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          color: '#92400e', fontSize: '12px', fontWeight: '800'
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#92400E', fontSize: '12px', fontWeight: '800'
         }}>
-          <span>📡 Opponent temporary connection drop • Waiting {disconnectCountdown || 30}s for reconnect...</span>
-          <button
-            onClick={() => {
-              setWinner(myRoleRef.current);
-              setResultModal({
-                isOpen: true,
-                outcome: 'WIN',
-                ratingDelta: 16,
-                xpGained: 30
-              });
-            }}
-            style={{ background: '#f59e0b', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: '800', cursor: 'pointer' }}
-          >
-            Claim Win
-          </button>
+          <span>Opponent reconnecting • Waiting {disconnectCountdown || 35}s...</span>
         </div>
       )}
+
+      {/* Opponent Left Alert Banner */}
+      {!winner && !matchFinalizedRef.current && connectionStatus === 'OPPONENT_LEFT' && (
+        <div style={{
+          width: '100%', background: '#FEF2F2', border: '1.5px solid #FCA5A5',
+          borderRadius: '12px', padding: '8px 14px', marginBottom: '8px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#991B1B', fontSize: '12px', fontWeight: '800'
+        }}>
+          <span>Opponent left the match.</span>
+        </div>
+      )}
+
 
 
       {/* Dynamic Turn Alert Banner */}
@@ -811,52 +983,49 @@ export default function GomokuGame({
             );
           })
         )}
+
+        {/* Premium In-Board Victory Tag */}
+        {winner && (
+          <InBoardVictoryBadge
+            winner={winner}
+            myRole={myRole}
+            gameType="gomoku"
+            outcome={resultModal.outcome}
+          />
+        )}
       </div>
 
-      {/* In-Game Live Reaction Toolbar (With Cooldown & Center Floating Animation) */}
-      <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+
+      {/* 4. IN-GAME RESULT BAR (No blocking popup) */}
+      {winner && (
+        <InGameResultBar
+          outcome={resultModal.outcome || (winner === myRole ? 'WIN' : (winner === 'DRAW' ? 'DRAW' : 'LOSS'))}
+          ratingDelta={resultModal.ratingDelta}
+          xpGained={resultModal.xpGained}
+          onRematch={handleOfferRematch}
+          onAcceptRematch={handleAcceptRematch}
+          onDeclineRematch={handleDeclineRematch}
+          onGoHome={handleGoHome}
+          isOnline={isOnline}
+          rematchStatus={rematchStatus}
+          opponentName={opponentProfile?.name || 'Opponent'}
+        />
+      )}
+
+
+      {/* 5. In-Game Live Reaction Toolbar (With Cooldown & Center Floating Animation) */}
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', marginTop: '4px' }}>
         <LiveEmojiReactionSystem
           matchId={onlineSession?.matchId}
           isOnline={isOnline}
           playerName={profile?.name || 'You'}
+          userId={profile?.id}
           incomingReaction={incomingReaction}
+          incomingChat={incomingChat}
         />
       </div>
-
-      {/* Result Modal */}
-
-      <MatchResultModal
-        isOpen={resultModal.isOpen}
-        onClose={() => {
-          setResultModal(prev => ({ ...prev, isOpen: false }));
-          if (isOnline) {
-            if (onGoHome) onGoHome();
-          } else {
-            resetGame();
-          }
-        }}
-        outcome={resultModal.outcome}
-        gameTitle="Gomoku (15×15)"
-        opponentName={isOnline ? (opponentProfile?.name || 'Opponent') : (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2')}
-        ratingDelta={resultModal.ratingDelta}
-        xpGained={resultModal.xpGained}
-        currentRating={profile?.rating || 1200}
-        level={profile?.level || 1}
-        xp={profile?.xp || 0}
-        movesCount={history.length}
-        onRematch={() => {
-          setResultModal(prev => ({ ...prev, isOpen: false }));
-          if (isOnline) {
-            if (onGoHome) onGoHome();
-          } else {
-            resetGame();
-          }
-        }}
-        onGoHome={() => {
-          setResultModal(prev => ({ ...prev, isOpen: false }));
-          if (onGoHome) onGoHome();
-        }}
-      />
     </div>
   );
 }
+
+

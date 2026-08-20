@@ -4,6 +4,9 @@ Allow: /
 Allow: /?game=gomoku
 Allow: /?game=connect4
 Allow: /?game=tictactoe
+Allow: /?game=memory
+Allow: /?game=ludo
 
 # Sitemaps
 Sitemap: https://onlinefreegames.vercel.app/sitemap.xml
+

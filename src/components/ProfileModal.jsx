@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   User, Sparkles, Check, X, LogOut, KeyRound, ShieldCheck, Trophy, Lock, 
-  ArrowRight, UserCheck, AlertCircle, RefreshCw, UserPlus, LogIn, ChevronLeft
+  ArrowRight, UserCheck, AlertCircle, RefreshCw, UserPlus, LogIn, ChevronLeft,
+  Mail, Download, Shield, Eye, EyeOff, Globe, Award, Flame, Zap, Dices, Layers, Grid
 } from 'lucide-react';
 import { AVATARS, saveUserProfile, getTier } from '../utils/userProfile.js';
 import { authService } from '../services/authService.js';
+import { validateEmail, evaluatePasswordStrength, validateGamerTag, validateDisplayName } from '../utils/validation.js';
 import { soundSynth } from '../utils/soundSynth.js';
-import { formatErrorMessage } from '../utils/errorHandler.js';
 
 export default function ProfileModal({
   isOpen,
@@ -16,60 +17,78 @@ export default function ProfileModal({
   onProfileUpdated,
   onLogout
 }) {
-  // Navigation View: 'DASHBOARD' (View/Edit), 'LOGIN' (Sign in), 'REGISTER' (Create account)
+  // Navigation View: 'DASHBOARD' | 'SIGNIN' | 'REGISTER' | 'SECURITY' | 'FORGOT_PASSWORD'
   const [viewMode, setViewMode] = useState('DASHBOARD');
 
-  // Edit Profile State
+  // Edit Profile State (Dashboard)
   const [name, setName] = useState(profile?.name || '');
   const [selectedAvatar, setSelectedAvatar] = useState(profile?.avatarId || '1');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Auth Form State (Login / Register)
+  // Auth Inputs (Sign In / Register / Security)
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
   const [gamertagInput, setGamertagInput] = useState('');
-  const [pinInput, setPinInput] = useState('');
   const [displayNameInput, setDisplayNameInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Live Password Strength
+  const passwordStrength = evaluatePasswordStrength(passwordInput);
 
   useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
     if (isOpen) {
-      const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       setViewMode('DASHBOARD');
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
+      setErrorMessage('');
+      setSuccessMessage('');
     }
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
   }, [isOpen]);
 
   useEffect(() => {
     if (profile) {
       setName(profile.name || '');
       setSelectedAvatar(profile.avatarId || '1');
-      setErrorMessage('');
-      setSavedSuccess(false);
     }
   }, [profile, isOpen]);
 
   if (!isOpen) return null;
 
-  const currentAvatar = AVATARS.find(a => a.id === selectedAvatar) || AVATARS[0];
-  const currentTier = getTier(profile?.rating || 1200);
   const totalMatches = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
+  const currentAvatar = AVATARS.find(a => a.id === selectedAvatar) || AVATARS[0];
+  const currentTier = getTier(profile?.rating || 1200, totalMatches);
   const winRate = totalMatches > 0 ? Math.round(((profile?.wins || 0) / totalMatches) * 100) : 0;
-  const isRegistered = !profile?.isGuest && profile?.gamertag;
+  const isRegisteredAccount = !profile?.isGuest && (profile?.email || profile?.gamertag);
+
+
+  const GAME_LIST = [
+    { key: 'connect4', label: 'Connect 4', icon: Grid, color: '#1e3a8a' },
+    { key: 'tictactoe', label: 'Tic-Tac-Toe', icon: Award, color: '#881337' },
+    { key: 'gomoku', label: 'Gomoku', icon: Trophy, color: '#0f172a' },
+    { key: 'memory', label: 'Memory Match', icon: Layers, color: '#7e22ce' },
+    { key: 'ludo', label: 'Ludo Championship', icon: Dices, color: '#ea580c' }
+  ];
 
   // 1. Save Profile Changes (Display Name & Avatar)
   const handleSaveProfile = (e) => {
     e.preventDefault();
-    if (!name.trim()) {
-      setErrorMessage('Please enter a valid player name.');
+    setErrorMessage('');
+    const validation = validateDisplayName(name);
+    if (!validation.isValid) {
+      setErrorMessage(validation.error);
       return;
     }
 
     const updated = saveUserProfile({
       ...profile,
-      name: name.trim().slice(0, 16),
+      name: validation.sanitizedName,
       avatarId: selectedAvatar
     });
 
@@ -79,112 +98,163 @@ export default function ProfileModal({
 
     soundSynth.playVictory();
     setSavedSuccess(true);
-    setErrorMessage('');
     setTimeout(() => {
       setSavedSuccess(false);
       onClose();
     }, 600);
   };
 
-  // 2. Sign In to Existing Account
-  const handleLoginSubmit = async (e) => {
+  // 2. Sign In with Email & Password
+  const handleSignInSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
-      const res = await authService.loginGamerTag({
-        gamertag: gamertagInput.trim(),
-        pin: pinInput.trim()
-      });
+      let res;
+      if (emailInput.includes('@')) {
+        res = await authService.signInWithEmail({
+          email: emailInput.trim(),
+          password: passwordInput
+        });
+      } else {
+        res = await authService.loginGamerTag({
+          gamertag: emailInput.trim(),
+          pin: passwordInput
+        });
+      }
 
       if (res.success && res.profile) {
-        if (onProfileUpdated) onProfileUpdated(res.profile);
         soundSynth.playVictory();
-        setSavedSuccess(true);
-        setGamertagInput('');
-        setPinInput('');
+        if (onProfileUpdated) onProfileUpdated(res.profile);
+        setSuccessMessage('Successfully signed in!');
         setTimeout(() => {
-          setSavedSuccess(false);
           setViewMode('DASHBOARD');
           onClose();
         }, 600);
       } else {
-        const formatted = formatErrorMessage(res.error || 'Invalid credentials', 'Authentication');
-        setErrorMessage(formatted.message);
+        soundSynth.playRotate();
+        setErrorMessage(res.error || 'Failed to sign in. Please verify your credentials.');
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Login failed. Please try again.');
+      setErrorMessage(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Register New Permanent Account
+  // 3. Create Cloud Account (with Guest Migration)
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
-      const cleanTag = gamertagInput.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-      const cleanName = displayNameInput.trim() || cleanTag;
-
-      if (cleanTag.length < 3) {
-        setErrorMessage('GamerTag must be at least 3 characters.');
-        setLoading(false);
-        return;
-      }
-      if (pinInput.trim().length < 4) {
-        setErrorMessage('PIN / Password must be at least 4 digits.');
-        setLoading(false);
-        return;
-      }
-
-      const res = await authService.registerGamerTag({
-        gamertag: cleanTag,
-        displayName: cleanName,
-        pin: pinInput.trim(),
-        avatarId: selectedAvatar
+      const res = await authService.signUpWithEmail({
+        email: emailInput.trim(),
+        password: passwordInput,
+        gamertag: gamertagInput.trim(),
+        displayName: displayNameInput.trim() || gamertagInput.trim(),
+        avatarId: selectedAvatar,
+        guestProfileToMigrate: profile
       });
 
       if (res.success && res.profile) {
-        if (onProfileUpdated) onProfileUpdated(res.profile);
         soundSynth.playVictory();
-        setSavedSuccess(true);
-        setGamertagInput('');
-        setPinInput('');
-        setDisplayNameInput('');
+        if (onProfileUpdated) onProfileUpdated(res.profile);
+        setSuccessMessage('Account registered successfully! All ratings migrated.');
         setTimeout(() => {
-          setSavedSuccess(false);
           setViewMode('DASHBOARD');
           onClose();
-        }, 600);
+        }, 800);
       } else {
-        const formatted = formatErrorMessage(res.error || 'Failed to create account', 'Registration');
-        setErrorMessage(formatted.message);
+        soundSynth.playRotate();
+        setErrorMessage(res.error || 'Registration failed. Please check your inputs.');
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Registration failed. Please try again.');
+      setErrorMessage(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
     }
   };
 
-  // 4. Logout / Switch Account
-  const handleLogoutClick = () => {
-    if (onLogout) onLogout();
-    soundSynth.playRotate();
-    setViewMode('LOGIN');
+  // 4. Google 1-Tap OAuth
+  const handleOAuthSignIn = async (provider) => {
+    setLoading(true);
+    setErrorMessage('');
+    const res = await authService.signInWithOAuth(provider);
+    if (!res.success) {
+      setErrorMessage(res.error || `Could not sign in with ${provider}.`);
+      setLoading(false);
+    }
   };
 
-  const modalContent = (
+  // 5. Password Reset Request
+  const handleForgotPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    const res = await authService.sendPasswordResetEmail(emailInput.trim());
+    setLoading(false);
+
+    if (res.success) {
+      soundSynth.playVictory();
+      setSuccessMessage(res.message);
+    } else {
+      soundSynth.playRotate();
+      setErrorMessage(res.error || 'Could not send recovery email.');
+    }
+  };
+
+  // 6. GDPR Data Export
+  const handleExportData = () => {
+    const res = authService.exportUserData(profile);
+    if (res.success) {
+      soundSynth.playVictory();
+      setSuccessMessage('Career data exported successfully as JSON!');
+    } else {
+      setErrorMessage('Export failed: ' + res.error);
+    }
+  };
+
+  // 7. Update Password
+  const handleChangePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+    setLoading(true);
+
+    const res = await authService.updatePassword(newPasswordInput.trim());
+    setLoading(false);
+
+    if (res.success) {
+      soundSynth.playVictory();
+      setSuccessMessage(res.message || 'Password updated successfully!');
+      setNewPasswordInput('');
+    } else {
+      soundSynth.playRotate();
+      setErrorMessage(res.error || 'Failed to update password.');
+    }
+  };
+
+  // 8. Log Out
+  const handleSignOut = () => {
+    if (onLogout) onLogout();
+    setViewMode('DASHBOARD');
+  };
+
+
+  return createPortal(
     <div
       style={{
         position: 'fixed',
         top: 0, left: 0, right: 0, bottom: 0,
         width: '100vw', height: '100vh',
-        background: 'rgba(15, 23, 42, 0.82)',
+        background: 'rgba(15, 23, 42, 0.75)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         display: 'flex',
@@ -199,567 +269,732 @@ export default function ProfileModal({
       <div
         className="card-enterprise animate-pop-in"
         style={{
-          width: 'min(95vw, 480px)',
-          maxHeight: '90dvh',
+          width: 'min(95vw, 490px)',
+          maxHeight: '92dvh',
           background: '#ffffff',
-          boxShadow: '0 25px 60px -12px rgba(15, 23, 42, 0.35)',
           borderRadius: '24px',
+          padding: 'clamp(16px, 4vw, 24px)',
+          boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.35)',
           border: '1.5px solid #e2e8f0',
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
-          padding: 'clamp(14px, 4vw, 24px)',
           gap: '14px',
-          overflowY: 'auto',
-          overflowX: 'hidden'
+          overflowY: 'auto'
         }}
         onClick={(e) => e.stopPropagation()}
       >
-
         {/* Modal Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {viewMode !== 'DASHBOARD' && (
               <button
-                type="button"
                 onClick={() => {
-                  setErrorMessage('');
                   setViewMode('DASHBOARD');
+                  setErrorMessage('');
+                  setSuccessMessage('');
                 }}
                 style={{
-                  width: '32px', height: '32px', borderRadius: '8px',
-                  background: '#f1f5f9', border: 'none',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#0f172a', cursor: 'pointer'
+                  background: '#f1f5f9', border: 'none', borderRadius: '8px',
+                  width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', color: '#0f172a'
                 }}
-                title="Back to Dashboard"
               >
-                <ChevronLeft size={18} />
+                <ChevronLeft size={16} />
               </button>
             )}
-
-            <div style={{
-              width: '38px', height: '38px', borderRadius: '10px',
-              background: '#0f172a', color: '#ffffff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-              {viewMode === 'LOGIN' ? <LogIn size={18} /> : viewMode === 'REGISTER' ? <UserPlus size={18} /> : <User size={18} />}
-            </div>
-
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <User size={18} color="#0f172a" />
               <h2 style={{
-                fontFamily: 'var(--font-heading)',
-                fontSize: '18px',
-                fontWeight: '900',
-                color: '#0f172a',
-                margin: 0
+                fontSize: '16px', fontWeight: '900', color: '#0f172a',
+                margin: 0, fontFamily: 'var(--font-heading)'
               }}>
-                {viewMode === 'LOGIN' ? 'SIGN IN' : viewMode === 'REGISTER' ? 'CREATE ACCOUNT' : 'PLAYER PROFILE'}
+                {viewMode === 'DASHBOARD' && 'Player Profile & Career'}
+                {viewMode === 'SIGNIN' && 'Sign In to Arena'}
+                {viewMode === 'REGISTER' && 'Create Cloud Account'}
+                {viewMode === 'FORGOT_PASSWORD' && 'Account Recovery'}
+                {viewMode === 'SECURITY' && 'Security & Data Controls'}
               </h2>
-              <p style={{ margin: 0, fontSize: '11px', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
-                {viewMode === 'LOGIN' ? 'Access your cloud ranking & records' : viewMode === 'REGISTER' ? 'Register your permanent GamerTag' : 'Manage your identity and theme'}
-              </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
+            className="modal-close-btn"
             style={{
-              width: '32px', height: '32px', borderRadius: '8px',
-              background: '#f1f5f9', border: 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#64748b', cursor: 'pointer'
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
             }}
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Global Error Banner */}
+        {/* Global Alert Messages */}
         {errorMessage && (
-          <div style={{
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '12px',
-            padding: '10px 12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: '#b91c1c',
-            fontSize: '12px',
-            fontWeight: '700'
+          <div className="animate-pop-in" style={{
+            background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px',
+            padding: '10px 12px', color: '#b91c1c', fontSize: '12px', fontWeight: '800',
+            display: 'flex', alignItems: 'center', gap: '8px'
           }}>
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
+            <AlertCircle size={15} flexShrink={0} />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        {/* ======================================================== */}
-        {/* VIEW 1: PLAYER PROFILE DASHBOARD (VIEW / EDIT IDENTITY) */}
-        {/* ======================================================== */}
+        {successMessage && (
+          <div className="animate-pop-in" style={{
+            background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '10px',
+            padding: '10px 12px', color: '#065f46', fontSize: '12px', fontWeight: '800',
+            display: 'flex', alignItems: 'center', gap: '8px'
+          }}>
+            <Check size={15} flexShrink={0} />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {/* Navigation Tabs (Top Selector) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isRegisteredAccount ? '1fr 1fr' : '1fr 1fr 1fr',
+          gap: '6px',
+          background: '#f8fafc',
+          padding: '4px',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0'
+        }}>
+          <button
+            onClick={() => { setViewMode('DASHBOARD'); setErrorMessage(''); }}
+            style={{
+              padding: '7px 10px', borderRadius: '8px', border: 'none',
+              background: viewMode === 'DASHBOARD' ? '#ffffff' : 'transparent',
+              color: viewMode === 'DASHBOARD' ? '#0f172a' : '#64748b',
+              fontWeight: '900', fontSize: '11px', cursor: 'pointer',
+              boxShadow: viewMode === 'DASHBOARD' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
+            }}
+          >
+            Dashboard
+          </button>
+
+          {!isRegisteredAccount ? (
+            <>
+              <button
+                onClick={() => { setViewMode('SIGNIN'); setErrorMessage(''); }}
+                style={{
+                  padding: '7px 10px', borderRadius: '8px', border: 'none',
+                  background: viewMode === 'SIGNIN' ? '#ffffff' : 'transparent',
+                  color: viewMode === 'SIGNIN' ? '#0f172a' : '#64748b',
+                  fontWeight: '900', fontSize: '11px', cursor: 'pointer',
+                  boxShadow: viewMode === 'SIGNIN' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
+                }}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setViewMode('REGISTER'); setErrorMessage(''); }}
+                style={{
+                  padding: '7px 10px', borderRadius: '8px', border: 'none',
+                  background: viewMode === 'REGISTER' ? '#ffffff' : 'transparent',
+                  color: viewMode === 'REGISTER' ? '#0f172a' : '#64748b',
+                  fontWeight: '900', fontSize: '11px', cursor: 'pointer',
+                  boxShadow: viewMode === 'REGISTER' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
+                }}
+              >
+                Create Account
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => { setViewMode('SECURITY'); setErrorMessage(''); }}
+              style={{
+                padding: '7px 10px', borderRadius: '8px', border: 'none',
+                background: viewMode === 'SECURITY' ? '#ffffff' : 'transparent',
+                color: viewMode === 'SECURITY' ? '#0f172a' : '#64748b',
+                fontWeight: '900', fontSize: '11px', cursor: 'pointer',
+                boxShadow: viewMode === 'SECURITY' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none'
+              }}
+            >
+              Security
+            </button>
+          )}
+        </div>
+
+        {/* VIEW 1: DASHBOARD */}
         {viewMode === 'DASHBOARD' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            
-            {/* Player Hero Card */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* User Identity Card */}
             <div style={{
-              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-              color: '#ffffff',
+              background: '#f8fafc',
+              border: '1.5px solid #e2e8f0',
               borderRadius: '16px',
-              padding: '16px',
+              padding: '14px',
               display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.25)'
+              alignItems: 'center',
+              justifyContent: 'space-between'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {/* Selected Avatar Preview */}
-                  <div style={{
-                    width: '46px', height: '46px', borderRadius: '12px',
-                    background: currentAvatar.color, color: '#ffffff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: '900', fontSize: '18px',
-                    boxShadow: `0 0 12px ${currentAvatar.color}99`
-                  }}>
-                    {name ? name[0].toUpperCase() : 'P'}
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '15px', fontWeight: '900' }}>
-                        {name || 'Player'}
-                      </span>
-                      {isRegistered ? (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '3px',
-                          fontSize: '9px', fontWeight: '900', padding: '1px 5px',
-                          borderRadius: '4px', background: '#38bdf8', color: '#0f172a',
-                          fontFamily: 'var(--font-mono)'
-                        }}>
-                          <ShieldCheck size={10} />
-                          @{profile.gamertag}
-                        </span>
-                      ) : (
-                        <span style={{
-                          fontSize: '9px', fontWeight: '800', padding: '1px 5px',
-                          borderRadius: '4px', background: 'rgba(255, 255, 255, 0.15)', color: '#94a3b8',
-                          fontFamily: 'var(--font-mono)'
-                        }}>
-                          GUEST
-                        </span>
-                      )}
-                    </div>
-
-                    <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
-                      <strong style={{ color: '#38bdf8' }}>{profile?.rating || 1200}</strong> ELO • {currentTier.name} ({currentTier.badge})
-                    </div>
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '46px', height: '46px', borderRadius: '12px',
+                  background: currentAvatar.color, color: '#ffffff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: '900', fontSize: '18px', boxShadow: '0 4px 10px rgba(0,0,0,0.15)'
+                }}>
+                  {name ? name[0].toUpperCase() : 'P'}
                 </div>
 
-                <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                  <div style={{ fontSize: '14px', fontWeight: '900', color: '#38bdf8' }}>
-                    Level {profile?.level || 1}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '15px', fontWeight: '900', color: '#0f172a' }}>
+                      {name || 'Player'}
+                    </span>
+                    <span style={{
+                      fontSize: '9px', fontWeight: '900', padding: '2px 6px',
+                      borderRadius: '6px', background: currentTier.color, color: '#ffffff'
+                    }}>
+                      {currentTier.name}
+                    </span>
                   </div>
-                  <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                    {winRate}% Win Rate
+                  <div style={{ fontSize: '11px', color: '#64748b', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+                    <strong>{profile?.rating || 1200}</strong> ELO • Level {profile?.level || 1} • <span style={{ color: '#ea580c', fontWeight: '800' }}>🔥 {profile?.dailyStreak || 1}d Streak</span>
                   </div>
                 </div>
               </div>
 
-              {/* Competitive Lifetime Stats Row */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '6px',
-                background: 'rgba(255, 255, 255, 0.05)',
-                padding: '8px',
-                borderRadius: '10px',
-                textAlign: 'center',
-                fontFamily: 'var(--font-mono)'
-              }}>
-                <div>
-                  <span style={{ fontSize: '9px', color: '#94a3b8', display: 'block' }}>MATCHES</span>
-                  <span style={{ fontSize: '12px', fontWeight: '900' }}>{totalMatches}</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: '9px', color: '#86efac', display: 'block' }}>WINS</span>
-                  <span style={{ fontSize: '12px', fontWeight: '900', color: '#4ade80' }}>{profile?.wins || 0}</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: '9px', color: '#fca5a5', display: 'block' }}>LOSSES</span>
-                  <span style={{ fontSize: '12px', fontWeight: '900', color: '#f87171' }}>{profile?.losses || 0}</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: '9px', color: '#94a3b8', display: 'block' }}>DRAWS</span>
-                  <span style={{ fontSize: '12px', fontWeight: '900' }}>{profile?.draws || 0}</span>
-                </div>
+              {/* Status Pill */}
+              {isRegisteredAccount ? (
+                <span style={{ fontSize: '10px', fontWeight: '900', background: '#dbeafe', color: '#1d4ed8', padding: '3px 8px', borderRadius: '6px' }}>
+                  SYNCED
+                </span>
+              ) : (
+                <button
+                  onClick={() => setViewMode('REGISTER')}
+                  style={{
+                    fontSize: '10px', fontWeight: '900', background: '#0f172a', color: '#ffffff',
+                    padding: '5px 9px', borderRadius: '8px', border: 'none', cursor: 'pointer'
+                  }}
+                >
+                  Claim Cloud
+                </button>
+              )}
+            </div>
+
+            {/* Lifetime Career Stats Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '800' }}>WINS</div>
+                <div style={{ fontSize: '15px', fontWeight: '900', color: '#16a34a', marginTop: '1px' }}>{profile?.wins || 0}</div>
+              </div>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '800' }}>LOSSES</div>
+                <div style={{ fontSize: '15px', fontWeight: '900', color: '#dc2626', marginTop: '1px' }}>{profile?.losses || 0}</div>
+              </div>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '800' }}>DRAWS</div>
+                <div style={{ fontSize: '15px', fontWeight: '900', color: '#475569', marginTop: '1px' }}>{profile?.draws || 0}</div>
+              </div>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '800' }}>WIN RATE</div>
+                <div style={{ fontSize: '15px', fontWeight: '900', color: '#0f172a', marginTop: '1px' }}>{winRate}%</div>
               </div>
             </div>
 
-            {/* Profile Customizer Form */}
-            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Per-Game Career Standings (All 5 Games) */}
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '800', color: '#475569', marginBottom: '6px' }}>
+                PER-GAME RATINGS & STATS
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                {GAME_LIST.map(g => {
+                  const Icon = g.icon;
+                  const gStat = profile?.gameStats?.[g.key] || {};
+                  const gRating = gStat.rating || 1200;
+                  const gWins = gStat.wins || 0;
+                  const gLosses = gStat.losses || 0;
+                  return (
+                    <div key={g.key} style={{
+                      background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px',
+                      padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Icon size={14} color={g.color} />
+                        <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f172a' }}>{g.label}</span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '11px', fontWeight: '900', fontFamily: 'var(--font-mono)', color: '#0f172a' }}>
+                          {gRating} ELO
+                        </div>
+                        <div style={{ fontSize: '9px', color: '#64748b', fontFamily: 'var(--font-mono)' }}>
+                          {gWins}W • {gLosses}L
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Edit Name & Avatar Theme */}
+            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                  PLAYER DISPLAY NAME
+                <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                  CHANGE DISPLAY NAME
                 </label>
                 <input
                   type="text"
-                  maxLength={16}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your GamerTag / Name..."
+                  maxLength={20}
+                  placeholder="e.g. Maverick"
                   style={{
-                    width: '100%', padding: '9px 12px', borderRadius: '10px',
+                    width: '100%', padding: '10px 12px', borderRadius: '10px',
                     border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
-                    color: '#0f172a', outline: 'none', boxSizing: 'border-box', background: '#f8fafc'
+                    color: '#0f172a', boxSizing: 'border-box'
                   }}
                 />
               </div>
 
-              {/* Avatar Color Picker */}
               <div>
                 <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                  CHOOSE AVATAR THEME
+                  AVATAR COLOR THEME
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(95px, 1fr))', gap: '6px' }}>
-                  {AVATARS.map((av) => (
-                    <button
-                      key={av.id}
-                      type="button"
-                      onClick={() => setSelectedAvatar(av.id)}
-                      style={{
-                        padding: '8px 6px',
-                        borderRadius: '10px',
-                        background: selectedAvatar === av.id ? '#0f172a' : '#f8fafc',
-                        color: selectedAvatar === av.id ? '#ffffff' : '#0f172a',
-                        border: selectedAvatar === av.id ? '1.5px solid #0f172a' : '1px solid #e2e8f0',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        fontSize: '11px',
-                        fontWeight: '800'
-                      }}
-                    >
-                      <span style={{
-                        width: '14px', height: '14px', borderRadius: '4px',
-                        background: av.color, flexShrink: 0
-                      }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{av.name}</span>
-                    </button>
-                  ))}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '6px' }}>
+                  {AVATARS.map(av => {
+                    const isSelected = av.id === selectedAvatar;
+                    return (
+                      <button
+                        key={av.id}
+                        type="button"
+                        onClick={() => setSelectedAvatar(av.id)}
+                        style={{
+                          aspectRatio: '1', borderRadius: '10px', background: av.color,
+                          border: isSelected ? '2.5px solid #0f172a' : '1px solid transparent',
+                          transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#ffffff', fontWeight: '900', fontSize: '12px', transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {isSelected ? <Check size={14} /> : av.name[0]}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-
-              {/* Save Changes Button */}
               <button
                 type="submit"
                 style={{
-                  width: '100%',
-                  padding: '12px',
-                  borderRadius: '12px',
-                  background: savedSuccess ? '#16a34a' : '#0f172a',
-                  color: '#ffffff',
-                  border: 'none',
-                  fontSize: '13px',
-                  fontWeight: '900',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'background 0.15s ease'
+                  padding: '11px', borderRadius: '12px',
+                  background: savedSuccess ? '#16a34a' : '#0f172a', color: '#ffffff',
+                  border: 'none', fontSize: '13px', fontWeight: '900', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                  marginTop: '4px'
                 }}
               >
-                {savedSuccess ? <Check size={16} /> : <Sparkles size={16} />}
-                <span>{savedSuccess ? 'SAVED SUCCESSFULLY' : 'SAVE PROFILE CHANGES'}</span>
+                {savedSuccess ? <Check size={16} /> : <UserCheck size={16} />}
+                <span>{savedSuccess ? 'Profile Saved!' : 'Save Changes'}</span>
               </button>
             </form>
-
-            {/* Account Status & Action Bar */}
-            <div style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '14px',
-              padding: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '10px'
-            }}>
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a' }}>
-                  {isRegistered ? `Signed in as @${profile.gamertag}` : 'Playing as Guest'}
-                </div>
-                <div style={{ fontSize: '10px', color: '#64748b' }}>
-                  {isRegistered ? 'Cloud sync and rankings active' : 'Sign in to sync your ratings across devices'}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                {isRegistered ? (
-                  <button
-                    type="button"
-                    onClick={handleLogoutClick}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      padding: '6px 10px',
-                      fontSize: '11px',
-                      fontWeight: '800',
-                      color: '#b91c1c',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <LogOut size={12} />
-                    <span>Log Out</span>
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setErrorMessage('');
-                        setViewMode('LOGIN');
-                      }}
-                      style={{
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '11px',
-                        fontWeight: '800',
-                        color: '#0f172a',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Sign In
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setErrorMessage('');
-                        setViewMode('REGISTER');
-                      }}
-                      style={{
-                        background: '#0f172a',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '11px',
-                        fontWeight: '800',
-                        color: '#ffffff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Register
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
           </div>
         )}
 
-        {/* ======================================================== */}
-        {/* VIEW 2: SIGN IN (LOGIN TO EXISTING ACCOUNT)              */}
-        {/* ======================================================== */}
-        {viewMode === 'LOGIN' && (
-          <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* VIEW 2: SIGN IN (Gold Standard OAuth Top + Form) */}
+        {viewMode === 'SIGNIN' && (
+          <form onSubmit={handleSignInSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Top 1-Tap Google OAuth */}
+            <button
+              type="button"
+              onClick={() => handleOAuthSignIn('google')}
+              disabled={loading}
+              style={{
+                width: '100%', padding: '11px', borderRadius: '12px',
+                border: '1.5px solid #cbd5e1', background: '#ffffff', color: '#0f172a',
+                fontSize: '13px', fontWeight: '800', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+              }}
+            >
+              <Globe size={16} color="#2563eb" />
+              <span>Continue with Google</span>
+            </button>
+
+            {/* Divider */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 0' }}>
+              <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+              <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '800' }}>OR SIGN IN WITH EMAIL</span>
+              <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+            </div>
+
             <div>
-              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                GAMERTAG / USERNAME
+              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                EMAIL ADDRESS / GAMERTAG
               </label>
               <input
                 type="text"
-                value={gamertagInput}
-                onChange={(e) => setGamertagInput(e.target.value)}
-                placeholder="e.g. bharath"
                 required
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="player@example.com or @gamertag"
                 style={{
                   width: '100%', padding: '10px 12px', borderRadius: '10px',
                   border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
-                  color: '#0f172a', outline: 'none', boxSizing: 'border-box'
+                  color: '#0f172a', boxSizing: 'border-box'
                 }}
-                autoFocus
               />
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                SECRET PIN / PASSWORD
-              </label>
-              <input
-                type="password"
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="••••"
-                maxLength={8}
-                required
-                style={{
-                  width: '100%', padding: '10px 12px', borderRadius: '10px',
-                  border: '1.5px solid #cbd5e1', fontSize: '14px', fontWeight: '800',
-                  color: '#0f172a', outline: 'none', boxSizing: 'border-box'
-                }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569' }}>
+                  PASSWORD
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('FORGOT_PASSWORD')}
+                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '11px', fontWeight: '800', cursor: 'pointer', padding: 0 }}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="••••••••"
+                  style={{
+                    width: '100%', padding: '10px 36px 10px 12px', borderRadius: '10px',
+                    border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
+                    color: '#0f172a', boxSizing: 'border-box'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
               style={{
-                width: '100%',
-                padding: '13px',
-                borderRadius: '12px',
-                background: '#0f172a',
-                color: '#ffffff',
-                border: 'none',
-                fontSize: '13px',
-                fontWeight: '900',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
+                padding: '12px', borderRadius: '12px',
+                background: '#0f172a', color: '#ffffff', border: 'none',
+                fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 marginTop: '4px'
               }}
             >
-              {loading ? <RefreshCw size={15} className="animate-spin" /> : <LogIn size={15} />}
-              <span>{loading ? 'SIGNING IN...' : 'SIGN IN TO ACCOUNT'}</span>
+              {loading ? <RefreshCw size={16} className="animate-spin" /> : <LogIn size={16} />}
+              <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
             </button>
 
-            {/* Toggle Link */}
             <div style={{ textAlign: 'center', fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
-              Don't have an account?{' '}
+              Don't have a verified account yet?{' '}
               <button
                 type="button"
-                onClick={() => {
-                  setErrorMessage('');
-                  setViewMode('REGISTER');
-                }}
-                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: '800', cursor: 'pointer', padding: 0 }}
+                onClick={() => { setViewMode('REGISTER'); setErrorMessage(''); }}
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: '900', cursor: 'pointer', padding: 0 }}
               >
-                Create one now
+                Create Account
               </button>
             </div>
           </form>
         )}
 
-        {/* ======================================================== */}
-        {/* VIEW 3: CREATE ACCOUNT (REGISTER NEW PERMANENT ACCOUNT)  */}
-        {/* ======================================================== */}
+        {/* VIEW 3: CREATE ACCOUNT (Gold Standard OAuth Top + Full Form) */}
         {viewMode === 'REGISTER' && (
-          <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                CHOOSE GAMERTAG / HANDLE
-              </label>
-              <input
-                type="text"
-                value={gamertagInput}
-                onChange={(e) => setGamertagInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                placeholder="e.g. bharath_king"
-                maxLength={16}
-                required
-                style={{
-                  width: '100%', padding: '9px 12px', borderRadius: '10px',
-                  border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
-                  color: '#0f172a', outline: 'none', boxSizing: 'border-box'
-                }}
-                autoFocus
-              />
-              <span style={{ fontSize: '10px', color: '#94a3b8', fontFamily: 'var(--font-mono)', display: 'block', marginTop: '3px' }}>
-                Letters, numbers, and underscores (3–16 characters)
-              </span>
+          <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+            {/* Top 1-Tap Google OAuth */}
+            <button
+              type="button"
+              onClick={() => handleOAuthSignIn('google')}
+              disabled={loading}
+              style={{
+                width: '100%', padding: '11px', borderRadius: '12px',
+                border: '1.5px solid #cbd5e1', background: '#ffffff', color: '#0f172a',
+                fontSize: '13px', fontWeight: '800', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+              }}
+            >
+              <Globe size={16} color="#2563eb" />
+              <span>Sign Up with Google</span>
+            </button>
+
+            {/* Divider */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '2px 0' }}>
+              <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+              <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '800' }}>OR SIGN UP WITH EMAIL</span>
+              <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                DISPLAY NAME (OPTIONAL)
+              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                EMAIL ADDRESS
               </label>
               <input
-                type="text"
-                value={displayNameInput}
-                onChange={(e) => setDisplayNameInput(e.target.value)}
-                placeholder="Your Public In-Game Name"
-                maxLength={18}
+                type="email"
+                required
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="player@example.com"
                 style={{
-                  width: '100%', padding: '9px 12px', borderRadius: '10px',
+                  width: '100%', padding: '10px 12px', borderRadius: '10px',
                   border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
-                  color: '#0f172a', outline: 'none', boxSizing: 'border-box'
+                  color: '#0f172a', boxSizing: 'border-box'
                 }}
               />
             </div>
 
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                  GAMERTAG HANDLE
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={gamertagInput}
+                  onChange={(e) => setGamertagInput(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="e.g. shadow_ninja"
+                  maxLength={16}
+                  style={{
+                    width: '100%', padding: '10px 12px', borderRadius: '10px',
+                    border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
+                    color: '#0f172a', boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                  DISPLAY NAME
+                </label>
+                <input
+                  type="text"
+                  value={displayNameInput}
+                  onChange={(e) => setDisplayNameInput(e.target.value)}
+                  placeholder="e.g. Alex"
+                  maxLength={20}
+                  style={{
+                    width: '100%', padding: '10px 12px', borderRadius: '10px',
+                    border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
+                    color: '#0f172a', boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
             <div>
-              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                CREATE 4-DIGIT PIN / PASSWORD
+              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                PASSWORD (MIN 8 CHARS)
               </label>
-              <input
-                type="password"
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="••••"
-                maxLength={8}
-                required
-                style={{
-                  width: '100%', padding: '9px 12px', borderRadius: '10px',
-                  border: '1.5px solid #cbd5e1', fontSize: '14px', fontWeight: '800',
-                  color: '#0f172a', outline: 'none', boxSizing: 'border-box'
-                }}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="••••••••"
+                  style={{
+                    width: '100%', padding: '10px 36px 10px 12px', borderRadius: '10px',
+                    border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
+                    color: '#0f172a', boxSizing: 'border-box'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {/* Password Strength Visual Meter */}
+              {passwordInput.length > 0 && (
+                <div style={{ marginTop: '6px' }}>
+                  <div style={{ display: 'flex', gap: '4px', height: '4px', borderRadius: '2px', overflow: 'hidden' }}>
+                    {[1, 2, 3, 4].map((step) => (
+                      <div
+                        key={step}
+                        style={{
+                          flex: 1,
+                          background: step <= passwordStrength.score ? passwordStrength.color : '#e2e8f0',
+                          borderRadius: '2px',
+                          transition: 'all 0.2s ease'
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div style={{ fontSize: '10px', color: passwordStrength.color, fontWeight: '800', marginTop: '3px' }}>
+                    {passwordStrength.feedback[0] || 'Password strength'}
+                  </div>
+                </div>
+              )}
             </div>
 
             <button
               type="submit"
               disabled={loading}
               style={{
-                width: '100%',
-                padding: '13px',
-                borderRadius: '12px',
-                background: '#0f172a',
-                color: '#ffffff',
-                border: 'none',
-                fontSize: '13px',
-                fontWeight: '900',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
+                padding: '12px', borderRadius: '12px',
+                background: '#0f172a', color: '#ffffff', border: 'none',
+                fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 marginTop: '4px'
               }}
             >
-              {loading ? <RefreshCw size={15} className="animate-spin" /> : <UserPlus size={15} />}
-              <span>{loading ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT & SYNC PROGRESS'}</span>
+              {loading ? <RefreshCw size={16} className="animate-spin" /> : <UserPlus size={16} />}
+              <span>{loading ? 'Creating Cloud Account...' : 'Create Account'}</span>
             </button>
 
-            {/* Toggle Link */}
             <div style={{ textAlign: 'center', fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
               Already have an account?{' '}
               <button
                 type="button"
-                onClick={() => {
-                  setErrorMessage('');
-                  setViewMode('LOGIN');
-                }}
-                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: '800', cursor: 'pointer', padding: 0 }}
+                onClick={() => { setViewMode('SIGNIN'); setErrorMessage(''); }}
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontWeight: '900', cursor: 'pointer', padding: 0 }}
               >
                 Sign In
               </button>
             </div>
           </form>
         )}
-      </div>
-    </div>
-  );
 
-  return createPortal(modalContent, document.body);
+        {/* VIEW 4: FORGOT PASSWORD */}
+        {viewMode === 'FORGOT_PASSWORD' && (
+          <form onSubmit={handleForgotPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p style={{ fontSize: '12px', color: '#64748b', margin: 0, lineHeight: 1.4 }}>
+              Enter your registered account email address. We will send a secure password reset link directly to your inbox.
+            </p>
+
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '4px' }}>
+                REGISTERED EMAIL ADDRESS
+              </label>
+              <input
+                type="email"
+                required
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="player@example.com"
+                style={{
+                  width: '100%', padding: '10px 12px', borderRadius: '10px',
+                  border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: '800',
+                  color: '#0f172a', boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                padding: '12px', borderRadius: '12px',
+                background: '#0f172a', color: '#ffffff', border: 'none',
+                fontSize: '13px', fontWeight: '900', cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+              }}
+            >
+              {loading ? <RefreshCw size={16} className="animate-spin" /> : <Mail size={16} />}
+              <span>{loading ? 'Sending Recovery Link...' : 'Send Recovery Email'}</span>
+            </button>
+          </form>
+        )}
+
+        {/* VIEW 5: SECURITY & GDPR DATA EXPORT */}
+        {viewMode === 'SECURITY' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Account Details */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px' }}>
+              <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a' }}>
+                Account Security ID: <span style={{ fontFamily: 'var(--font-mono)', color: '#64748b' }}>{profile?.id}</span>
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                Provider: {profile?.authProvider || 'Verified Cloud'} • Status: Online
+              </div>
+            </div>
+
+            {/* Change Password Form */}
+            <form onSubmit={handleChangePasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 0', borderBottom: '1px solid #e2e8f0' }}>
+              <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569' }}>
+                CHANGE ACCOUNT PASSWORD
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="New password (min 8 chars)"
+                  style={{
+                    flex: 1, padding: '8px 10px', borderRadius: '8px',
+                    border: '1.5px solid #cbd5e1', fontSize: '12px', fontWeight: '800',
+                    color: '#0f172a', boxSizing: 'border-box'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !newPasswordInput}
+                  style={{
+                    padding: '8px 12px', borderRadius: '8px',
+                    background: '#0f172a', color: '#ffffff', border: 'none',
+                    fontSize: '11px', fontWeight: '800', cursor: loading ? 'not-allowed' : 'pointer',
+                    flexShrink: 0
+                  }}
+                >
+                  {loading ? 'Updating...' : 'Update'}
+                </button>
+              </div>
+            </form>
+
+            {/* GDPR Data Export */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #e2e8f0' }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>Export Match Data (GDPR)</div>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>Download all your match history & career ratings as JSON</div>
+              </div>
+              <button
+                onClick={handleExportData}
+                className="btn-secondary"
+                style={{ padding: '6px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '800' }}
+              >
+                <Download size={13} />
+                <span>Export JSON</span>
+              </button>
+            </div>
+
+            {/* Sign Out Action */}
+            <button
+              onClick={handleSignOut}
+              style={{
+                padding: '12px', borderRadius: '12px',
+                background: '#fee2e2', color: '#b91c1c', border: '1px solid #fecaca',
+                fontSize: '13px', fontWeight: '900', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                marginTop: '8px'
+              }}
+            >
+              <LogOut size={16} />
+              <span>Sign Out of Account</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
 }

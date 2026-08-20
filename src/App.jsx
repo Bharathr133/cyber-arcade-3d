@@ -2,29 +2,38 @@ import React, { useState, useEffect } from 'react';
 import EnterpriseHeader from './components/EnterpriseHeader.jsx';
 import EnterpriseFooter from './components/EnterpriseFooter.jsx';
 import ArcadeHomeScreen from './components/ArcadeHomeScreen.jsx';
-import StatsModal from './components/StatsModal.jsx';
 import ProfileModal from './components/ProfileModal.jsx';
+
 import MatchSettingsModal from './components/MatchSettingsModal.jsx';
 import GlobalLeaderboardModal from './components/GlobalLeaderboardModal.jsx';
 import OnlineMatchmakingModal from './components/OnlineMatchmakingModal.jsx';
+import WelcomeCelebrationModal from './components/WelcomeCelebrationModal.jsx';
 import MobileBottomNav from './components/MobileBottomNav.jsx';
-import GameLaunchModal from './components/GameLaunchModal.jsx';
 import { CustomAlertProvider, useCustomAlert } from './components/CustomAlertProvider.jsx';
-
-
-
-
-
 import DesktopAppSidebar from './components/DesktopAppSidebar.jsx';
+import { ShieldCheck, RefreshCw, Sparkles } from 'lucide-react';
+
+import BroadcastBanner from './components/BroadcastBanner.jsx';
+import AdminPage from './pages/AdminPage.jsx';
+import AuthPage from './pages/AuthPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
+
+
 import GomokuGame from './games/GomokuGame.jsx';
 import ConnectFour from './games/ConnectFour.jsx';
 import TicTacToe from './games/TicTacToe.jsx';
+import MemoryMatch from './games/MemoryMatch.jsx';
+import LudoGame from './games/LudoGame.jsx';
 import { soundSynth } from './utils/soundSynth.js';
 import { getUserProfile, recordMatchResult, logoutUserProfile } from './utils/userProfile.js';
+import { authService } from './services/authService.js';
+
 
 import { getGameSettings } from './utils/gameSettings.js';
 import { cloudSync } from './utils/cloudSync.js';
 import { presenceService } from './services/presenceService.js';
+import { realtimeManager } from './services/realtimeManager.js';
+import { matchmakingService } from './services/matchmakingService.js';
 
 const STATS_STORAGE_KEY = 'championship_arena_stats';
 const ACTIVE_ONLINE_SESSION_KEY = 'championship_active_online_session';
@@ -32,14 +41,16 @@ const ACTIVE_ONLINE_SESSION_KEY = 'championship_active_online_session';
 const DEFAULT_STATS = {
   gomoku: { p1Wins: 0, p2Wins: 0, draws: 0 },
   connect4: { p1Wins: 0, p2Wins: 0, draws: 0 },
-  tictactoe: { p1Wins: 0, p2Wins: 0, draws: 0 }
+  tictactoe: { p1Wins: 0, p2Wins: 0, draws: 0 },
+  memory: { p1Wins: 0, p2Wins: 0, draws: 0 },
+  ludo: { p1Wins: 0, p2Wins: 0, draws: 0 }
 };
 
 // Route Metadata for Dynamic SEO Titles & Descriptions
 const ROUTE_META = {
   home: {
-    title: 'Online Free Games — 2-Player Multiplayer Gomoku, Connect 4 & Tic-Tac-Toe',
-    desc: 'Play free competitive 2-player games online with instant matchmaking and global ratings.'
+    title: 'Online Free Games — 2-Player Multiplayer Connect 4, Tic-Tac-Toe, Gomoku, Memory & Ludo',
+    desc: 'Play free competitive games online with instant matchmaking and global ratings.'
   },
   gomoku: {
     title: 'Gomoku Online (15×15) — Online Free Games',
@@ -53,9 +64,17 @@ const ROUTE_META = {
     title: 'Tic-Tac-Toe Online (3×3) — Online Free Games',
     desc: 'Play real-time 3×3 Tic-Tac-Toe with friends via room codes or test your skills against Smart AI.'
   },
+  memory: {
+    title: 'Memory Match Online — Level-Based Icon Matching & Blitz Timers',
+    desc: 'Play speed Memory Match card pairs with level progression, combo multipliers, and Smart AI memory bot.'
+  },
+  ludo: {
+    title: 'Ludo Championship (2-4P) — Online Free Games',
+    desc: 'Play 2-4 player Ludo tournament board with smart AI bots, safe star zones, and animated 3D dice.'
+  },
   leaderboard: {
     title: 'Global Grandmasters Leaderboard — Online Free Games',
-    desc: 'Top 50 global player rankings and competitive ELO leaderboards for Gomoku, Connect 4, and Tic-Tac-Toe.'
+    desc: 'Top 50 global player rankings and competitive ELO leaderboards.'
   },
   stats: {
     title: 'Career Records & Match Statistics — Online Free Games',
@@ -64,8 +83,14 @@ const ROUTE_META = {
   rules: {
     title: 'Game Settings & Blitz Timers — Online Free Games',
     desc: 'Customize turn timers, bank times, and first-player rules for competitive matches.'
+  },
+  admin: {
+    title: 'Platform Operations Backoffice — games4u',
+    desc: 'Platform administration, player directory, live arenas, and anti-cheat operations.'
   }
 };
+
+
 
 function MainApp() {
   const alert = useCustomAlert();
@@ -77,11 +102,11 @@ function MainApp() {
       const pageParam = params.get('page');
       const joinParam = params.get('join');
 
-      if (gameParam && ['gomoku', 'connect4', 'tictactoe'].includes(gameParam)) {
+      if (gameParam && ['gomoku', 'connect4', 'tictactoe', 'memory', 'ludo'].includes(gameParam)) {
         return { gameId: gameParam, page: null };
       }
       if (pageParam) {
-        if (['gomoku', 'connect4', 'tictactoe'].includes(pageParam)) {
+        if (['gomoku', 'connect4', 'tictactoe', 'memory', 'ludo'].includes(pageParam)) {
           return { gameId: pageParam, page: null };
         }
         return { gameId: 'home', page: pageParam };
@@ -89,8 +114,11 @@ function MainApp() {
       if (joinParam) {
         if (joinParam.includes('connect4')) return { gameId: 'connect4', page: null };
         if (joinParam.includes('tictactoe')) return { gameId: 'tictactoe', page: null };
+        if (joinParam.includes('memory')) return { gameId: 'memory', page: null };
+        if (joinParam.includes('ludo')) return { gameId: 'ludo', page: null };
         return { gameId: 'gomoku', page: null };
       }
+
     } catch (e) {}
     return { gameId: 'home', page: null };
   };
@@ -110,11 +138,26 @@ function MainApp() {
   const initialRoute = getRouteFromUrl();
   const [activeGameId, setActiveGameId] = useState(initialRoute.gameId);
   const [activeGameMode, setActiveGameMode] = useState(getModeFromUrl);
-  const [isStatsOpen, setIsStatsOpen] = useState(initialRoute.page === 'stats');
-  const [isProfileOpen, setIsProfileOpen] = useState(initialRoute.page === 'profile');
+  const [activePage, setActivePage] = useState(initialRoute.page);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(initialRoute.page === 'rules' || initialRoute.page === 'settings');
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(initialRoute.page === 'leaderboard');
   const [isMuted, setIsMuted] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [isWelcomeCelebrationOpen, setIsWelcomeCelebrationOpen] = useState(false);
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState(() => {
+    try {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      return hash.includes('access_token') || 
+             hash.includes('type=signup') || 
+             hash.includes('type=email_confirmation') || 
+             hash.includes('type=recovery') ||
+             search.includes('code=');
+    } catch (e) {
+      return false;
+    }
+  });
 
   // Online Matchmaking Modal State
   const [matchmakingModal, setMatchmakingModal] = useState({
@@ -123,13 +166,6 @@ function MainApp() {
     gameId: 'tictactoe',
     gameTitle: 'Tic-Tac-Toe'
   });
-
-  // Game Launch Options Modal State (AI / Local / Online / Room + Settings)
-  const [launchModal, setLaunchModal] = useState({
-    isOpen: false,
-    gameId: 'connect4'
-  });
-
 
   // Active Online Session State (Restored from sessionStorage on refresh)
   const [activeOnlineSession, setActiveOnlineSession] = useState(() => {
@@ -144,8 +180,15 @@ function MainApp() {
   // User Profile State
   const [profile, setProfile] = useState(() => getUserProfile());
 
-  // Game Settings State
-  const [settings, setSettings] = useState(() => getGameSettings());
+  // Per-User Game Settings State (Strictly Isolated per User)
+  const [settings, setSettings] = useState(() => getGameSettings(profile?.id));
+
+  // Sync settings when active user changes
+  useEffect(() => {
+    if (profile?.id) {
+      setSettings(getGameSettings(profile.id));
+    }
+  }, [profile?.id]);
 
   // Lifetime Match Stats
   const [stats, setStats] = useState(() => {
@@ -156,6 +199,35 @@ function MainApp() {
       return DEFAULT_STATS;
     }
   });
+
+  // Live Supabase Auth Session Listener with Verification Celebration
+  useEffect(() => {
+    const isFromVerification = isVerifyingAuth;
+
+    const unsubscribeAuth = authService.setupAuthListener((verifiedProfile) => {
+      setProfile({ ...verifiedProfile });
+
+      if (isFromVerification || window.location.hash.includes('access_token') || window.location.search.includes('code=')) {
+        // Smoothly clear URL token hash
+        try {
+          window.history.replaceState(null, '', window.location.pathname);
+        } catch (e) {}
+
+        // Small delay for smooth verification transition
+        setTimeout(() => {
+          setIsVerifyingAuth(false);
+          setIsWelcomeCelebrationOpen(true);
+        }, 900);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+    };
+  }, [isVerifyingAuth]);
+
+
+
 
   // Initialize Global Platform Presence
   useEffect(() => {
@@ -184,12 +256,27 @@ function MainApp() {
     } catch (e) {}
   }, []);
 
+
+  // Listen to browser Back / Forward buttons (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = getRouteFromUrl();
+      const mode = getModeFromUrl();
+      setActiveGameId(route.gameId);
+      setActiveGameMode(mode);
+      setIsLeaderboardOpen(route.page === 'leaderboard');
+      setIsSettingsOpen(route.page === 'rules' || route.page === 'settings');
+      setIsProfileOpen(route.page === 'profile');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Synchronize document title and metadata with active route
   useEffect(() => {
     let key = 'home';
     if (activeGameId && activeGameId !== 'home') key = activeGameId;
     else if (isLeaderboardOpen) key = 'leaderboard';
-    else if (isStatsOpen) key = 'stats';
     else if (isSettingsOpen) key = 'rules';
 
     const meta = ROUTE_META[key] || ROUTE_META.home;
@@ -197,70 +284,37 @@ function MainApp() {
 
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) metaDesc.setAttribute('content', meta.desc);
-  }, [activeGameId, isLeaderboardOpen, isStatsOpen, isSettingsOpen]);
-
-  // Protect against accidental browser tab closes / reloads while inside an active match
-  useEffect(() => {
-    const handleBeforeUnload = (e) => {
-      if (activeGameId && activeGameId !== 'home') {
-        e.preventDefault();
-        e.returnValue = '';
-        return '';
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [activeGameId]);
-
-  const customAlert = useCustomAlert();
-
-
-  // Guard navigation when user is actively inside a game
-  const confirmExitIfInGame = async (callback) => {
-    const isInside = activeGameId && activeGameId !== 'home';
-    if (isInside) {
-      const confirmed = await customAlert.show({
-        type: 'confirm',
-        title: 'Exit Current Game?',
-        message: 'You have an active match in progress. Are you sure you want to leave and return to the main hub?',
-        confirmText: 'Exit Match',
-        cancelText: 'Keep Playing',
-        isDestructive: true
-      });
-      if (!confirmed) return;
-    }
-    if (callback) callback();
-  };
+  }, [activeGameId, isLeaderboardOpen, isSettingsOpen]);
 
   // Navigate to dedicated game page with chosen mode & clean URL update
   const handleNavigate = (gameId, mode = 'VS_COMPUTER') => {
-    const isInside = activeGameId && activeGameId !== 'home';
-    if (isInside && gameId !== activeGameId) {
-      confirmExitIfInGame(() => {
-        executeNavigate(gameId, mode);
-      });
-    } else {
-      executeNavigate(gameId, mode);
-    }
+    executeNavigate(gameId, mode);
   };
 
   const executeNavigate = (gameId, mode = 'VS_COMPUTER') => {
     setActiveGameId(gameId);
     setActiveGameMode(mode);
+    setActivePage(null);
     setIsLeaderboardOpen(false);
-    setIsStatsOpen(false);
     setIsSettingsOpen(false);
     setIsProfileOpen(false);
+
+    try {
+      presenceService.setCurrentGame(gameId === 'home' ? null : gameId);
+    } catch (e) {}
 
     if (gameId === 'home') {
       setActiveOnlineSession(null);
       try { sessionStorage.removeItem(ACTIVE_ONLINE_SESSION_KEY); } catch (e) {}
       window.history.pushState({}, '', window.location.pathname);
     } else {
-      const modeSlug = mode === 'LOCAL_2P' ? 'local' : mode === 'ONLINE_MATCH' ? 'online' : 'ai';
+      const modeSlug = mode === 'LOCAL_2P' ? 'local' : mode === 'LOCAL_4P' ? '4p' : mode === 'ONLINE_MATCH' ? 'online' : mode === 'SOLO_LEVELS' ? 'campaign' : 'ai';
       window.history.pushState({}, '', `?game=${gameId}&mode=${modeSlug}`);
     }
   };
+
+
+
 
   // Launch Online Match from Matchmaking Modal
   const handleLaunchOnlineGame = (sessionData) => {
@@ -274,91 +328,74 @@ function MainApp() {
     executeNavigate(gameId, 'ONLINE_MATCH');
   };
 
-  // Open Game Launch Options Modal (Vs AI / 2P Local / Online / Private + Name + Settings)
-  const handleOpenGameOptions = (gameId) => {
-    confirmExitIfInGame(() => {
-      setLaunchModal({
-        isOpen: true,
-        gameId: gameId || 'connect4'
-      });
-    });
-  };
+
 
   // Matchmaking Triggers from Home Cards
-
   const handleStartQuickMatch = (gameId, gameTitle) => {
-    confirmExitIfInGame(() => {
-      setMatchmakingModal({
-        isOpen: true,
-        mode: 'QUICK_MATCH',
-        gameId,
-        gameTitle
-      });
+    setMatchmakingModal({
+      isOpen: true,
+      mode: 'QUICK_MATCH',
+      gameId,
+      gameTitle: gameTitle || 'Matchmaking'
     });
   };
 
   const handleCreatePrivateRoom = (gameId, gameTitle) => {
-    confirmExitIfInGame(() => {
-      setMatchmakingModal({
-        isOpen: true,
-        mode: 'CREATE_PRIVATE',
-        gameId,
-        gameTitle
-      });
+    setMatchmakingModal({
+      isOpen: true,
+      mode: 'CREATE_PRIVATE',
+      gameId,
+      gameTitle: gameTitle || 'Private Room'
     });
   };
 
   const handleJoinPrivateRoom = (gameId = 'connect4', roomCode = null) => {
-    confirmExitIfInGame(() => {
-      const titles = {
-        connect4: 'Connect 4',
-        tictactoe: 'Tic-Tac-Toe',
-        gomoku: 'Gomoku'
-      };
-      if (roomCode && typeof roomCode === 'string' && roomCode.length <= 6) {
-        window.history.replaceState({}, '', `?join=${roomCode.toUpperCase()}&game=${gameId}`);
-      }
-      setMatchmakingModal({
-        isOpen: true,
-        mode: 'JOIN_PRIVATE',
-        gameId,
-        gameTitle: titles[gameId] || 'Private Match'
-      });
+    const titles = {
+      connect4: 'Connect 4',
+      tictactoe: 'Tic-Tac-Toe',
+      gomoku: 'Gomoku',
+      memory: 'Memory Match',
+      ludo: 'Ludo Championship'
+    };
+    if (roomCode && typeof roomCode === 'string' && roomCode.length <= 6) {
+      window.history.replaceState({}, '', `?join=${roomCode.toUpperCase()}&game=${gameId}`);
+    }
+    setMatchmakingModal({
+      isOpen: true,
+      mode: 'JOIN_PRIVATE',
+      gameId,
+      gameTitle: titles[gameId] || 'Private Match'
     });
   };
 
+
+
   const handleOpenJoinPrivate = handleJoinPrivateRoom;
 
-  // Open dedicated modal route and update URL bar
+  // Open dedicated full-page or modal route and update URL bar
   const handleOpenPage = (pageName) => {
-    const isInside = activeGameId && activeGameId !== 'home';
-    if (isInside) {
-      confirmExitIfInGame(() => {
-        executeOpenPage(pageName);
-      });
-    } else {
-      executeOpenPage(pageName);
-    }
-  };
-
-  const executeOpenPage = (pageName) => {
+    setActivePage(pageName);
     setIsLeaderboardOpen(pageName === 'leaderboard');
-    setIsStatsOpen(pageName === 'stats');
     setIsSettingsOpen(pageName === 'rules' || pageName === 'settings');
-    setIsProfileOpen(pageName === 'profile');
+    setIsProfileOpen(false);
 
     if (pageName) {
+      if (['login', 'signup', 'forgot', 'profile'].includes(pageName)) {
+        setActiveGameId('home');
+      }
       window.history.pushState({}, '', `?page=${pageName}`);
+    } else {
+      setActiveGameId('home');
+      window.history.pushState({}, '', window.location.pathname);
     }
   };
 
-  // Close modals and restore URL
+  // Close modals / return to game lobby
   const handleCloseModals = () => {
     setIsLeaderboardOpen(false);
-    setIsStatsOpen(false);
     setIsSettingsOpen(false);
-
     setIsProfileOpen(false);
+    setActivePage(null);
 
     if (activeGameId && activeGameId !== 'home') {
       const modeSlug = activeGameMode === 'LOCAL_2P' ? 'local' : activeGameMode === 'ONLINE_MATCH' ? 'online' : 'ai';
@@ -368,13 +405,15 @@ function MainApp() {
     }
   };
 
+
   const getActiveMobileTab = () => {
-    if (isLeaderboardOpen) return 'leaderboard';
-    if (isStatsOpen) return 'stats';
-    if (isSettingsOpen) return 'rules';
-    if (isProfileOpen) return 'profile';
+    if (activePage === 'profile' || isProfileOpen) return 'profile';
+    if (activePage === 'leaderboard' || isLeaderboardOpen) return 'leaderboard';
+    if (activePage === 'rules' || activePage === 'settings' || isSettingsOpen) return 'rules';
     return 'home';
   };
+
+
 
   const handleMobileTabSelect = (tabId) => {
     if (tabId === 'home') {
@@ -386,23 +425,6 @@ function MainApp() {
       handleOpenPage(tabId);
     }
   };
-
-  // Listen to browser Back/Forward navigation buttons
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const route = getRouteFromUrl();
-      setActiveGameId(route.gameId);
-      setActiveGameMode(getModeFromUrl());
-      setIsStatsOpen(route.page === 'stats');
-      setIsProfileOpen(route.page === 'profile');
-      setIsSettingsOpen(route.page === 'rules' || route.page === 'settings');
-      setIsLeaderboardOpen(route.page === 'leaderboard');
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
 
   // Initial cloud sync on load
   useEffect(() => {
@@ -423,6 +445,11 @@ function MainApp() {
 
     if (updatedProfile) {
       setProfile({ ...updatedProfile });
+      cloudSync.syncProfileToCloud(updatedProfile, {
+        gameKey,
+        outcome,
+        opponentName
+      });
     }
 
     setStats((prev) => {
@@ -452,23 +479,94 @@ function MainApp() {
   };
 
   const handleLogout = async () => {
-    logoutUserProfile();
+    const confirmed = await alert.show({
+      type: 'confirm',
+      isDestructive: true,
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?'
+    });
+
+
+    if (!confirmed) return;
+
+    await authService.signOut();
     const freshProfile = getUserProfile();
     setProfile(freshProfile);
     handleCloseModals();
-    soundSynth.playVictory();
+    soundSynth.playRotate();
     alert.show({
       type: 'success',
-      title: 'Logged Out Successfully',
-      message: 'Your profile has been reset to a fresh Guest account. You can log into any GamerTag anytime from Profile Settings.'
+      title: 'Signed Out',
+      message: 'You have been signed out.'
     });
   };
 
 
 
+
+
   const renderActiveView = () => {
+    // Dedicated Full Pages
+    if (activePage === 'login' || activePage === 'signin') {
+      return (
+        <AuthPage
+          initialMode="login"
+          profile={profile}
+          onProfileUpdated={(up) => setProfile(up)}
+          onBackToHome={() => handleOpenPage(null)}
+        />
+      );
+    }
+
+    if (activePage === 'signup' || activePage === 'register') {
+      return (
+        <AuthPage
+          initialMode="signup"
+          profile={profile}
+          onProfileUpdated={(up) => setProfile(up)}
+          onBackToHome={() => handleOpenPage(null)}
+        />
+      );
+    }
+
+    if (activePage === 'forgot' || activePage === 'reset_password') {
+      return (
+        <AuthPage
+          initialMode="forgot"
+          profile={profile}
+          onProfileUpdated={(up) => setProfile(up)}
+          onBackToHome={() => handleOpenPage(null)}
+        />
+      );
+    }
+
+    if (activePage === 'admin') {
+      return (
+        <AdminPage
+          profile={profile}
+          onBackToHome={() => handleOpenPage(null)}
+        />
+      );
+    }
+
+    if (activePage === 'profile') {
+      return (
+        <ProfilePage
+          profile={profile}
+          onProfileUpdated={(up) => setProfile(up)}
+          onBackToHome={() => handleOpenPage(null)}
+          onLogout={handleLogout}
+          onNavigateToAuth={(m) => handleOpenPage(m)}
+          onOpenAdmin={() => handleOpenPage('admin')}
+        />
+      );
+    }
+
+
+
     switch (activeGameId) {
       case 'gomoku':
+
         return (
           <div className="animate-pop-in" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <GomokuGame
@@ -507,14 +605,41 @@ function MainApp() {
             />
           </div>
         );
+      case 'memory':
+        return (
+          <div className="animate-pop-in" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <MemoryMatch
+              profile={profile}
+              initialMode={activeGameMode}
+              onlineSession={activeOnlineSession}
+              settings={settings}
+              onMatchFinished={handleMatchFinished}
+              onGoHome={() => handleNavigate('home')}
+            />
+          </div>
+        );
+      case 'ludo':
+        return (
+          <div className="animate-pop-in" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+            <LudoGame
+              profile={profile}
+              initialMode={activeGameMode}
+              onlineSession={activeOnlineSession}
+              settings={settings}
+              onMatchFinished={handleMatchFinished}
+              onGoHome={() => handleNavigate('home')}
+            />
+          </div>
+        );
       case 'home':
       default:
+
         return (
           <div className="animate-pop-in" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <ArcadeHomeScreen
               profile={profile}
               stats={stats}
-              onSelectGame={handleOpenGameOptions}
+              onSelectGame={handleNavigate}
               onStartQuickMatch={handleStartQuickMatch}
               onCreatePrivateRoom={handleCreatePrivateRoom}
               onJoinPrivateRoom={handleJoinPrivateRoom}
@@ -524,6 +649,7 @@ function MainApp() {
               onOpenLeaderboard={() => handleOpenPage('leaderboard')}
             />
 
+
           </div>
         );
     }
@@ -532,72 +658,91 @@ function MainApp() {
   const isInsideGame = activeGameId && activeGameId !== 'home';
 
   return (
-    <div style={{
-
+    <div className="app-layout-wrapper" style={{
       minHeight: '100vh',
       width: '100%',
       maxWidth: '100%',
       display: 'flex',
       flexDirection: 'row',
-      background: '#f8fafc',
+      background: '#FAFAFA',
+      color: '#18181B',
       boxSizing: 'border-box'
     }}>
-      {/* Full-Height Desktop Navigation Sidebar Drawer (Papergames Style) */}
-      <DesktopAppSidebar
-        profile={profile}
-        onSelectGame={handleOpenGameOptions}
-        onStartQuickMatch={handleStartQuickMatch}
-        onOpenProfile={() => handleOpenPage('profile')}
-        onOpenStats={() => handleOpenPage('stats')}
-        onOpenSettings={() => handleOpenPage('rules')}
-        onOpenLeaderboard={() => handleOpenPage('leaderboard')}
-        onJoinPrivateRoom={handleJoinPrivateRoom}
-      />
 
 
-      {/* Main Content Area */}
-      <div style={{
-        flex: 1,
-        minWidth: 0,
-        height: isInsideGame ? '100dvh' : 'auto',
-        minHeight: isInsideGame ? '100dvh' : '100vh',
-        maxHeight: isInsideGame ? '100dvh' : 'none',
-        overflowY: isInsideGame ? 'hidden' : 'auto',
-        overflowX: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: isInsideGame ? 'space-between' : 'flex-start',
-        padding: isInsideGame ? 'clamp(6px, 1.2vw, 10px) clamp(6px, 2vw, 12px)' : '0 clamp(14px, 2.5vw, 28px) 24px',
-        boxSizing: 'border-box'
-      }}>
+      {/* Full-Height Desktop Navigation Sidebar (Hidden during active match play) */}
+      {!isInsideGame && (
+        <DesktopAppSidebar
+          isExpanded={isSidebarExpanded}
+          onToggleExpand={() => setIsSidebarExpanded(prev => !prev)}
+          activeGameId={activeGameId}
+          activePage={activePage}
+          profile={profile}
+          onSelectGame={handleNavigate}
+          onStartQuickMatch={handleStartQuickMatch}
+          onOpenProfile={() => handleOpenPage('profile')}
+          onOpenSettings={() => handleOpenPage('rules')}
+          onOpenLeaderboard={() => handleOpenPage('leaderboard')}
+          onOpenAdmin={() => handleOpenPage('admin')}
+          onLogout={handleLogout}
+          onNavigateToAuth={(m) => handleOpenPage(m)}
+          onJoinPrivateRoom={handleJoinPrivateRoom}
+        />
+      )}
+
+      {/* Main Content Area (100% full-width during games) */}
+      <div 
+        className={`app-main-content ${isInsideGame ? 'in-game-fullscreen' : (isSidebarExpanded ? 'sidebar-expanded' : 'sidebar-collapsed')}`}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          justifyContent: 'flex-start',
+          padding: isInsideGame ? '0 clamp(8px, 2vw, 20px) 16px' : '0 clamp(12px, 2.5vw, 28px) 24px',
+          boxSizing: 'border-box',
+          transition: 'margin-left 0.25s cubic-bezier(0.16, 1, 0.3, 1), width 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+      >
+
+
+        {/* Global Platform Broadcast Announcement Banner (Hidden during active match play or inside Admin Backoffice) */}
+        <BroadcastBanner isInsideGame={isInsideGame} isInsideAdmin={activePage === 'admin'} />
+
+
 
         {/* Enterprise Header with Exit Hub & Live Players Counter */}
         <EnterpriseHeader
           activeGameId={activeGameId}
           onSelectGame={handleNavigate}
-          onOpenStats={() => handleOpenPage('stats')}
           onOpenProfile={() => handleOpenPage('profile')}
           onOpenSettings={() => handleOpenPage('rules')}
           onOpenLeaderboard={() => handleOpenPage('leaderboard')}
+          onOpenAdmin={() => handleOpenPage('admin')}
           onJoinPrivateRoom={handleJoinPrivateRoom}
+          onLogout={handleLogout}
+          onNavigateToAuth={(m) => handleOpenPage(m)}
           profile={profile}
           isMuted={isMuted}
           onToggleSound={toggleSound}
         />
 
+
         {/* Dedicated Page Viewport */}
         <main style={{
           width: '100%',
           display: 'flex',
-          justifyContent: 'center',
-          alignItems: isInsideGame ? 'center' : 'flex-start',
+          flexDirection: 'column',
+          alignItems: 'stretch',
           flex: 1,
-          overflow: isInsideGame ? 'hidden' : 'visible',
           boxSizing: 'border-box'
         }}>
           {renderActiveView()}
         </main>
+
+
 
         {/* Standard Developer Footer */}
         {!isInsideGame ? (
@@ -610,10 +755,11 @@ function MainApp() {
             paddingTop: '2px',
             textAlign: 'center'
           }}>
-            Online Free Games • Developed by <a href="https://bharathr.vercel.app/" target="_blank" rel="noreferrer" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: '700' }}>Bharath R</a>
+            games4u • Realtime Strategy Arena
           </div>
         )}
       </div>
+
 
 
       {/* Online Matchmaking Modal */}
@@ -623,7 +769,11 @@ function MainApp() {
         gameId={matchmakingModal.gameId}
         gameTitle={matchmakingModal.gameTitle}
         currentUserProfile={profile}
-        onClose={() => setMatchmakingModal(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => {
+          matchmakingService.cancelMatchmaking().catch(() => {});
+          realtimeManager.leaveRoom(matchmakingModal.gameId);
+          setMatchmakingModal(prev => ({ ...prev, isOpen: false }));
+        }}
         onLaunchOnlineGame={handleLaunchOnlineGame}
         onLaunchAiGame={() => {
           setMatchmakingModal(prev => ({ ...prev, isOpen: false }));
@@ -632,15 +782,6 @@ function MainApp() {
         onProfileUpdated={(updated) => setProfile({ ...updated })}
       />
 
-
-
-      {/* Stats Modal / Route */}
-      <StatsModal
-        isOpen={isStatsOpen}
-        onClose={handleCloseModals}
-        profile={profile}
-        stats={stats}
-      />
 
 
       {/* Profile Modal / Route */}
@@ -656,6 +797,7 @@ function MainApp() {
       <MatchSettingsModal
         isOpen={isSettingsOpen}
         onClose={handleCloseModals}
+        profile={profile}
         onSettingsSaved={(newSettings) => setSettings(newSettings)}
       />
 
@@ -666,26 +808,65 @@ function MainApp() {
         currentUserProfile={profile}
       />
 
-      {/* Game Launch Options Modal (Vs AI / 2P Local / Online / Private + Name + Settings) */}
-      <GameLaunchModal
-        isOpen={launchModal.isOpen}
-        gameId={launchModal.gameId}
+      {/* Verified Email Welcome Celebration Modal (Sound, Confetti, Rewards) */}
+      <WelcomeCelebrationModal
+        isOpen={isWelcomeCelebrationOpen}
         profile={profile}
-        onClose={() => setLaunchModal(prev => ({ ...prev, isOpen: false }))}
-        onLaunchGame={(gameId, mode) => {
-          handleNavigate(gameId, mode);
-        }}
-        onStartQuickMatch={(gameId, gameTitle) => {
-          handleStartQuickMatch(gameId, gameTitle);
-        }}
-        onCreatePrivateRoom={(gameId, gameTitle) => {
-          handleCreatePrivateRoom(gameId, gameTitle);
-        }}
-        onJoinPrivateRoom={(gameId, code) => {
-          handleJoinPrivateRoom(gameId, code);
-        }}
-        onProfileUpdated={(updated) => setProfile({ ...updated })}
+        onClose={() => setIsWelcomeCelebrationOpen(false)}
+        onStartQuickMatch={handleStartQuickMatch}
       />
+
+      {/* Verification Loading State Overlay */}
+      {isVerifyingAuth && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999999,
+          background: 'rgba(9, 9, 11, 0.85)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '14px',
+          animation: 'fadeIn 0.15s ease-out'
+        }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            background: '#18181B',
+            border: '1px solid #27272A',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF'
+          }}>
+            <RefreshCw size={22} className="animate-spin text-blue-500" />
+          </div>
+
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '16px',
+              fontWeight: '700',
+              color: '#FAFAFA',
+              margin: '0 0 4px 0'
+            }}>
+              Authenticating session...
+            </h3>
+            <p style={{
+              fontFamily: 'var(--font-body)',
+              fontSize: '12px',
+              color: '#A1A1AA',
+              margin: 0
+            }}>
+              Verifying credentials and syncing profile
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Bottom Navigation Bar (Dock) */}
       <MobileBottomNav
@@ -694,6 +875,7 @@ function MainApp() {
         isInsideGame={isInsideGame}
       />
     </div>
+
 
 
   );

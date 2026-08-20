@@ -6,6 +6,7 @@ import { getGameSettings, saveGameSettings } from '../utils/gameSettings.js';
 export default function MatchSettingsModal({
   isOpen,
   onClose,
+  profile,
   onSettingsSaved
 }) {
   const [turnTime, setTurnTime] = useState(30);
@@ -15,17 +16,21 @@ export default function MatchSettingsModal({
 
   useEffect(() => {
     if (isOpen) {
-      const current = getGameSettings();
+      const current = getGameSettings(profile?.id);
       setTurnTime(current.turnTimeLimit);
       setBankMinutes(current.playerBankMinutes);
       setFirstPlayer(current.firstPlayer);
-
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -87,6 +92,7 @@ export default function MatchSettingsModal({
         boxSizing: 'border-box',
         pointerEvents: 'auto'
       }}
+      onClick={onClose}
     >
       <div
         className="card-enterprise animate-pop-in"
@@ -105,17 +111,17 @@ export default function MatchSettingsModal({
           boxSizing: 'border-box',
           margin: 'auto'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
 
         {/* Close Button */}
         <button
           onClick={onClose}
+          className="modal-close-btn"
           style={{
-            position: 'absolute', top: '16px', right: '16px',
-            width: '34px', height: '34px', borderRadius: '10px',
-            background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', zIndex: 10
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
           }}
         >
           <X size={18} />

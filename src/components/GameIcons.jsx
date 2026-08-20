@@ -83,3 +83,55 @@ export function GomokuIcon({ size = 18, className = '' }) {
     </svg>
   );
 }
+
+// Custom Crisp Vector Icon for Memory Match
+export function MemoryMatchIcon({ size = 18, className = '' }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={{ flexShrink: 0 }}
+    >
+      {/* Front Card (White with Amber Crown) */}
+      <rect x="2.5" y="3.5" width="11" height="15" rx="2" fill="#ffffff" stroke="#0f172a" strokeWidth="1.5" />
+      <path d="M5.5 12L7 9L9 11L10.5 9L11.5 12H5.5Z" fill="#d97706" />
+
+      {/* Back Overlapping Card (Navy Slate) */}
+      <rect x="10.5" y="5.5" width="11" height="15" rx="2" fill="#0f172a" stroke="#334155" strokeWidth="1.5" />
+      <circle cx="16" cy="13" r="2" fill="#38bdf8" opacity="0.8" />
+    </svg>
+  );
+}
+
+// Custom Crisp Vector Icon for Ludo Championship
+export function LudoIcon({ size = 18, className = '' }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={{ flexShrink: 0 }}
+    >
+      {/* 4 Quadrants Board Frame */}
+      <rect x="2.5" y="2.5" width="19" height="19" rx="3" fill="#ffffff" stroke="#0f172a" strokeWidth="1.8" />
+      
+      {/* 4 Color Quadrants */}
+      <rect x="4.5" y="4.5" width="5.5" height="5.5" rx="1" fill="#16a34a" />
+      <rect x="14" y="4.5" width="5.5" height="5.5" rx="1" fill="#ca8a04" />
+      <rect x="4.5" y="14" width="5.5" height="5.5" rx="1" fill="#dc2626" />
+      <rect x="14" y="14" width="5.5" height="5.5" rx="1" fill="#2563eb" />
+      
+      {/* Center Home Diamond */}
+      <polygon points="12,9.5 14.5,12 12,14.5 9.5,12" fill="#0f172a" />
+      <circle cx="12" cy="12" r="1" fill="#f59e0b" />
+    </svg>
+  );
+}
+

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Trophy, X, RotateCcw, Award, Flame, Circle, CircleDot, Hash } from 'lucide-react';
+import { Trophy, X, RotateCcw, Award, Flame, Circle, CircleDot, Hash, Layers, Dices } from 'lucide-react';
 import { getTier } from '../utils/userProfile.js';
 
 export default function StatsModal({
@@ -25,7 +25,9 @@ export default function StatsModal({
   const gameStats = profile?.gameStats || {
     gomoku: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
     connect4: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
-    tictactoe: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 }
+    tictactoe: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+    memory: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 },
+    ludo: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 }
   };
 
   const calculateTotal = (gameData) => {
@@ -40,6 +42,8 @@ export default function StatsModal({
   const gomoku = calculateTotal(gameStats.gomoku || {});
   const connect4 = calculateTotal(gameStats.connect4 || {});
   const tictactoe = calculateTotal(gameStats.tictactoe || {});
+  const memory = calculateTotal(gameStats.memory || {});
+  const ludo = calculateTotal(gameStats.ludo || {});
 
   const allWins = (profile?.wins || 0);
   const allLosses = (profile?.losses || 0);
@@ -50,8 +54,11 @@ export default function StatsModal({
   const STAT_CARDS = [
     { title: 'Gomoku (15×15)', key: 'gomoku', icon: Circle, data: gomoku, color: '#0f172a', bg: '#f1f5f9' },
     { title: 'Connect 4 (7×6)', key: 'connect4', icon: CircleDot, data: connect4, color: '#1e3a8a', bg: '#eff6ff' },
-    { title: 'Tic-Tac-Toe (3×3)', key: 'tictactoe', icon: Hash, data: tictactoe, color: '#881337', bg: '#fff1f2' }
+    { title: 'Tic-Tac-Toe (3×3)', key: 'tictactoe', icon: Hash, data: tictactoe, color: '#881337', bg: '#fff1f2' },
+    { title: 'Memory Match', key: 'memory', icon: Layers, data: memory, color: '#d97706', bg: '#fffbeb' },
+    { title: 'Ludo Championship', key: 'ludo', icon: Dices, data: ludo, color: '#dc2626', bg: '#fef2f2' }
   ];
+
 
   const overallTier = getTier(profile?.rating || 1200);
 
@@ -72,6 +79,7 @@ export default function StatsModal({
         boxSizing: 'border-box',
         pointerEvents: 'auto'
       }}
+      onClick={onClose}
     >
       <div
         className="card-enterprise animate-pop-in"
@@ -90,17 +98,17 @@ export default function StatsModal({
           boxSizing: 'border-box',
           margin: 'auto'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
 
         {/* Close Button */}
         <button
           onClick={onClose}
+          className="modal-close-btn"
           style={{
-            position: 'absolute', top: '16px', right: '16px',
-            width: '34px', height: '34px', borderRadius: '10px',
-            background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', zIndex: 10
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
           }}
         >
           <X size={18} />

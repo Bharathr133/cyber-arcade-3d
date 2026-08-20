@@ -6,7 +6,7 @@ import {
 import { AVATARS, saveUserProfile, getTier } from '../utils/userProfile.js';
 import { soundSynth } from '../utils/soundSynth.js';
 import { getGameSettings, saveGameSettings } from '../utils/gameSettings.js';
-import { TicTacToeIcon, ConnectFourIcon, GomokuIcon } from './GameIcons.jsx';
+import { TicTacToeIcon, ConnectFourIcon, GomokuIcon, MemoryMatchIcon, LudoIcon } from './GameIcons.jsx';
 
 export default function GameLaunchModal({
   isOpen,
@@ -30,6 +30,12 @@ export default function GameLaunchModal({
 
   useEffect(() => {
     if (isOpen) {
+      if (gameId === 'memory') {
+        setSelectedMode('SOLO_LEVELS');
+      } else {
+        setSelectedMode('VS_COMPUTER');
+      }
+
       const hasCustomName = profile?.name && profile.name !== 'Player' && profile.name.trim().length > 0;
       const currentName = hasCustomName ? profile.name : (profile?.name || '');
       setPlayerName(currentName);
@@ -37,7 +43,7 @@ export default function GameLaunchModal({
       setIsEditingName(!hasCustomName); // If no saved name, open edit box directly
       setNameError('');
 
-      const saved = getGameSettings();
+      const saved = getGameSettings(profile?.id);
       setTurnTime(saved.turnTimeLimit || 20);
 
       const originalOverflow = document.body.style.overflow;
@@ -46,15 +52,19 @@ export default function GameLaunchModal({
         document.body.style.overflow = originalOverflow;
       };
     }
-  }, [isOpen, profile]);
+  }, [isOpen, profile, gameId]);
+
 
   if (!isOpen) return null;
 
   const GAME_INFO = {
     connect4: { title: 'Connect 4', subtitle: '7 × 6 Gravity Grid', icon: ConnectFourIcon, tag: '7×6 GRID' },
     tictactoe: { title: 'Tic-Tac-Toe', subtitle: '3 × 3 Fast Arena', icon: TicTacToeIcon, tag: '3×3 FAST' },
-    gomoku: { title: 'Gomoku', subtitle: '15 × 15 Tournament Grid', icon: GomokuIcon, tag: '15×15 PRO' }
+    gomoku: { title: 'Gomoku', subtitle: '15 × 15 Tournament Grid', icon: GomokuIcon, tag: '15×15 PRO' },
+    memory: { title: 'Memory Match', subtitle: 'Icon Match Blitz (5 Levels)', icon: MemoryMatchIcon, tag: '5 LEVELS' },
+    ludo: { title: 'Ludo Championship', subtitle: '2-4 Player Battle Arena', icon: LudoIcon, tag: '2-4 PLAYERS' }
   };
+
 
   const game = GAME_INFO[gameId] || GAME_INFO.connect4;
   const GameIcon = game.icon;
@@ -137,7 +147,8 @@ export default function GameLaunchModal({
           gap: '14px',
           overflowY: 'auto',
           overflowX: 'hidden',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          position: 'relative'
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -170,11 +181,11 @@ export default function GameLaunchModal({
 
           <button
             onClick={onClose}
+            className="modal-close-btn"
             style={{
-              width: '32px', height: '32px', borderRadius: '8px',
-              background: '#f1f5f9', border: 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#64748b', cursor: 'pointer'
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
             }}
           >
             <X size={18} />
@@ -342,100 +353,238 @@ export default function GameLaunchModal({
             SELECT GAME MODE
           </label>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {/* 1. Vs AI */}
-            <button
-              type="button"
-              onClick={() => setSelectedMode('VS_COMPUTER')}
-              style={{
-                padding: '12px 10px',
-                borderRadius: '12px',
-                background: selectedMode === 'VS_COMPUTER' ? '#0f172a' : '#f8fafc',
-                color: selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a',
-                border: selectedMode === 'VS_COMPUTER' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '5px',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Bot size={18} color={selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a'} />
-              <span style={{ fontSize: '12px', fontWeight: '800' }}>Play Vs AI</span>
-              <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Singleplayer</span>
-            </button>
+          {gameId === 'memory' ? (
+            /* Memory Match Tailored Modes: Campaign, Vs AI, 2P Duel */
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedMode('SOLO_LEVELS')}
+                style={{
+                  gridColumn: '1 / -1',
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'SOLO_LEVELS' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'SOLO_LEVELS' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'SOLO_LEVELS' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Play size={16} fill={selectedMode === 'SOLO_LEVELS' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '13px', fontWeight: '900' }}>Play Campaign (5 Levels)</span>
+              </button>
 
-            {/* 2. 2P Pass & Play */}
-            <button
-              type="button"
-              onClick={() => setSelectedMode('LOCAL_2P')}
-              style={{
-                padding: '12px 10px',
-                borderRadius: '12px',
-                background: selectedMode === 'LOCAL_2P' ? '#0f172a' : '#f8fafc',
-                color: selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a',
-                border: selectedMode === 'LOCAL_2P' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '5px',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <User size={18} color={selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a'} />
-              <span style={{ fontSize: '12px', fontWeight: '800' }}>2P Local</span>
-              <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Same Device</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setSelectedMode('VS_COMPUTER')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'VS_COMPUTER' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'VS_COMPUTER' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Bot size={18} color={selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>Vs AI Bot Duel</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Singleplayer</span>
+              </button>
 
-            {/* 3. Online Quick Match */}
-            <button
-              type="button"
-              onClick={() => setSelectedMode('ONLINE_MATCH')}
-              style={{
-                padding: '12px 10px',
-                borderRadius: '12px',
-                background: selectedMode === 'ONLINE_MATCH' ? '#0f172a' : '#f8fafc',
-                color: selectedMode === 'ONLINE_MATCH' ? '#ffffff' : '#0f172a',
-                border: selectedMode === 'ONLINE_MATCH' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '5px',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Zap size={18} color={selectedMode === 'ONLINE_MATCH' ? '#ffffff' : '#0f172a'} />
-              <span style={{ fontSize: '12px', fontWeight: '800' }}>Online Match</span>
-              <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Ranked Arena</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setSelectedMode('LOCAL_2P')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'LOCAL_2P' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'LOCAL_2P' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <User size={18} color={selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>2P Local Duel</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Same Device</span>
+              </button>
+            </div>
+          ) : gameId === 'ludo' ? (
+            /* Ludo Championship Tailored Modes: Vs 3 Bots, 2P Classic, 4P Local */
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedMode('VS_COMPUTER')}
+                style={{
+                  gridColumn: '1 / -1',
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'VS_COMPUTER' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'VS_COMPUTER' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Bot size={16} color={selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '13px', fontWeight: '900' }}>Vs 3 Bots (1P + 3 Smart Bots)</span>
+              </button>
 
-            {/* 4. Private Room */}
-            <button
-              type="button"
-              onClick={() => setSelectedMode('PRIVATE_ROOM')}
-              style={{
-                padding: '12px 10px',
-                borderRadius: '12px',
-                background: selectedMode === 'PRIVATE_ROOM' ? '#0f172a' : '#f8fafc',
-                color: selectedMode === 'PRIVATE_ROOM' ? '#ffffff' : '#0f172a',
-                border: selectedMode === 'PRIVATE_ROOM' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '5px',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <Lock size={18} color={selectedMode === 'PRIVATE_ROOM' ? '#ffffff' : '#0f172a'} />
-              <span style={{ fontSize: '12px', fontWeight: '800' }}>Private Room</span>
-              <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Invite Friends</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setSelectedMode('LOCAL_2P')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'LOCAL_2P' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'LOCAL_2P' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <User size={18} color={selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>2P Classic</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Red vs Yellow</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedMode('LOCAL_4P')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'LOCAL_4P' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'LOCAL_4P' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'LOCAL_4P' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <User size={18} color={selectedMode === 'LOCAL_4P' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>4P Battle</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>4 Players Local</span>
+              </button>
+            </div>
+          ) : (
+            /* Connect4, TicTacToe, Gomoku Modes: AI, 2P Local, Online Match, Private Room */
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedMode('VS_COMPUTER')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'VS_COMPUTER' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'VS_COMPUTER' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '5px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Bot size={18} color={selectedMode === 'VS_COMPUTER' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>Play Vs AI</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Singleplayer</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedMode('LOCAL_2P')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'LOCAL_2P' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'LOCAL_2P' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '5px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <User size={18} color={selectedMode === 'LOCAL_2P' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>2P Local</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Same Device</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedMode('ONLINE_MATCH')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'ONLINE_MATCH' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'ONLINE_MATCH' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'ONLINE_MATCH' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '5px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Zap size={18} color={selectedMode === 'ONLINE_MATCH' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>Online Match</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Ranked Arena</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedMode('PRIVATE_ROOM')}
+                style={{
+                  padding: '12px 10px',
+                  borderRadius: '12px',
+                  background: selectedMode === 'PRIVATE_ROOM' ? '#0f172a' : '#f8fafc',
+                  color: selectedMode === 'PRIVATE_ROOM' ? '#ffffff' : '#0f172a',
+                  border: selectedMode === 'PRIVATE_ROOM' ? '1.5px solid #0f172a' : '1.5px solid #e2e8f0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '5px',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Lock size={18} color={selectedMode === 'PRIVATE_ROOM' ? '#ffffff' : '#0f172a'} />
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>Private Room</span>
+                <span style={{ fontSize: '9px', opacity: 0.7, fontFamily: 'var(--font-mono)' }}>Invite Friends</span>
+              </button>
+            </div>
+          )}
         </div>
+
 
         {/* 3. Conditional Private Room Code Input */}
         {selectedMode === 'PRIVATE_ROOM' && (
