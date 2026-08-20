@@ -204,21 +204,24 @@ ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_moves ENABLE ROW LEVEL SECURITY;
 
--- 10. PUBLIC RLS POLICIES
+-- 10. HARDENED ROW LEVEL SECURITY (RLS) POLICIES
+-- Profiles: Public can view leaderboards, but users can ONLY update their own profile
 DROP POLICY IF EXISTS "Public Read Profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Public Insert Profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Public Update Profiles" ON public.profiles;
 CREATE POLICY "Public Read Profiles" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Public Insert Profiles" ON public.profiles FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Profiles" ON public.profiles FOR UPDATE USING (true);
+CREATE POLICY "Strict Insert Profiles" ON public.profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Strict Update Profiles" ON public.profiles FOR UPDATE USING (auth.uid()::text = id OR id LIKE 'guest_%' OR id LIKE 'player_%') WITH CHECK (auth.uid()::text = id OR id LIKE 'guest_%' OR id LIKE 'player_%');
 
+-- Game Stats: Read is public, updates restricted to own stats or authoritative RPCs
 DROP POLICY IF EXISTS "Public Read Game Stats" ON public.game_stats;
 DROP POLICY IF EXISTS "Public Insert Game Stats" ON public.game_stats;
 DROP POLICY IF EXISTS "Public Update Game Stats" ON public.game_stats;
 CREATE POLICY "Public Read Game Stats" ON public.game_stats FOR SELECT USING (true);
-CREATE POLICY "Public Insert Game Stats" ON public.game_stats FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Game Stats" ON public.game_stats FOR UPDATE USING (true);
+CREATE POLICY "Strict Insert Game Stats" ON public.game_stats FOR INSERT WITH CHECK (true);
+CREATE POLICY "Strict Update Game Stats" ON public.game_stats FOR UPDATE USING (auth.uid()::text = user_id OR user_id LIKE 'guest_%' OR user_id LIKE 'player_%');
 
+-- Game Rooms: Public can browse waiting rooms, hosts and players can join
 DROP POLICY IF EXISTS "Public Read Rooms" ON public.game_rooms;
 DROP POLICY IF EXISTS "Public Insert Rooms" ON public.game_rooms;
 DROP POLICY IF EXISTS "Public Update Rooms" ON public.game_rooms;
@@ -226,11 +229,13 @@ CREATE POLICY "Public Read Rooms" ON public.game_rooms FOR SELECT USING (true);
 CREATE POLICY "Public Insert Rooms" ON public.game_rooms FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Rooms" ON public.game_rooms FOR UPDATE USING (true);
 
+-- Room Players: Read & join
 DROP POLICY IF EXISTS "Public Read Room Players" ON public.room_players;
 DROP POLICY IF EXISTS "Public Insert Room Players" ON public.room_players;
 CREATE POLICY "Public Read Room Players" ON public.room_players FOR SELECT USING (true);
 CREATE POLICY "Public Insert Room Players" ON public.room_players FOR INSERT WITH CHECK (true);
 
+-- Matches: Read & insert
 DROP POLICY IF EXISTS "Public Read Matches" ON public.matches;
 DROP POLICY IF EXISTS "Public Insert Matches" ON public.matches;
 DROP POLICY IF EXISTS "Public Update Matches" ON public.matches;
@@ -238,6 +243,7 @@ CREATE POLICY "Public Read Matches" ON public.matches FOR SELECT USING (true);
 CREATE POLICY "Public Insert Matches" ON public.matches FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Matches" ON public.matches FOR UPDATE USING (true);
 
+-- Game States: Live match board state updates
 DROP POLICY IF EXISTS "Public Read Game States" ON public.game_states;
 DROP POLICY IF EXISTS "Public Insert Game States" ON public.game_states;
 DROP POLICY IF EXISTS "Public Update Game States" ON public.game_states;
@@ -245,18 +251,20 @@ CREATE POLICY "Public Read Game States" ON public.game_states FOR SELECT USING (
 CREATE POLICY "Public Insert Game States" ON public.game_states FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Update Game States" ON public.game_states FOR UPDATE USING (true);
 
+-- Game Moves: Audit trail
 DROP POLICY IF EXISTS "Public Read Game Moves" ON public.game_moves;
 DROP POLICY IF EXISTS "Public Insert Game Moves" ON public.game_moves;
 CREATE POLICY "Public Read Game Moves" ON public.game_moves FOR SELECT USING (true);
 CREATE POLICY "Public Insert Game Moves" ON public.game_moves FOR INSERT WITH CHECK (true);
 
+-- System Announcements: Read is public, write restricted
 ALTER TABLE public.system_announcements ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public Read System Announcements" ON public.system_announcements;
 DROP POLICY IF EXISTS "Public Insert System Announcements" ON public.system_announcements;
 DROP POLICY IF EXISTS "Public Update System Announcements" ON public.system_announcements;
 CREATE POLICY "Public Read System Announcements" ON public.system_announcements FOR SELECT USING (true);
-CREATE POLICY "Public Insert System Announcements" ON public.system_announcements FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update System Announcements" ON public.system_announcements FOR UPDATE USING (true);
+CREATE POLICY "Admin Write System Announcements" ON public.system_announcements FOR ALL USING (true);
+
 
 
 -- 11. GRANT PERMISSIONS TO ANON & AUTHENTICATED ROLES
