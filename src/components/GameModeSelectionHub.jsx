@@ -221,12 +221,13 @@ export default function GameModeSelectionHub({
     } else if (chosenMode === 'PRIVATE_ROOM') {
       onCreatePrivateRoom(game.id, game.title);
     } else if (chosenMode === 'LOCAL_2P' || chosenMode === 'LOCAL_4P') {
-      const cleanP2 = localP2Name.trim() || 'Player 2';
+      const cleanP2 = localP2Name.trim();
       const localPlayers = {
-        p1: activeName || 'Player 1',
+        p1: activeName,
         p2: cleanP2,
         count: isLudo ? 4 : 2
       };
+
       try {
         sessionStorage.setItem('arcade_local_players', JSON.stringify(localPlayers));
       } catch (e) {}

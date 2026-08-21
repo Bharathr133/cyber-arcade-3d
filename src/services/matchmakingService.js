@@ -51,15 +51,50 @@ class MatchmakingService {
       });
 
       if (!error && data && data.success !== false) {
+        if (data.status === 'MATCH_READY' && data.match_id) {
+          try {
+            const { data: matchRec } = await supabase
+              .from('matches')
+              .select('player_1_id, player_1_name, player_2_id, player_2_name')
+              .eq('id', data.match_id)
+              .single();
+            if (matchRec) {
+              const isP1 = matchRec.player_1_id === user.userId;
+              const oppId = isP1 ? matchRec.player_2_id : matchRec.player_1_id;
+              let oppName = isP1 ? matchRec.player_2_name : matchRec.player_1_name;
+              let oppAvatar = data.opponent?.avatarId || '2';
+              let oppRating = data.opponent?.rating || 1200;
+
+              if (oppId) {
+                const { data: prof } = await supabase
+                  .from('profiles')
+                  .select('name, display_name, username, avatar_id, rating')
+                  .eq('id', oppId)
+                  .single();
+                if (prof) {
+                  oppName = prof.display_name || prof.name || (prof.username ? `@${prof.username}` : null) || oppName;
+                  if (prof.avatar_id) oppAvatar = prof.avatar_id;
+                  if (prof.rating) oppRating = prof.rating;
+                }
+              }
+
+              data.opponent = {
+                name: oppName || data.opponent?.name,
+                avatarId: oppAvatar,
+                rating: oppRating
+              };
+            }
+          } catch (e) {}
+        }
         return data;
       }
     } catch (e) {}
 
     // 2. Direct Supabase Table Fallback (Guaranteed to succeed!)
     try {
-      const oneMinuteAgo = new Date(Date.now() - 45 * 1000).toISOString();
+      const thirtySecondsAgo = new Date(Date.now() - 30 * 1000).toISOString();
 
-      // Look for a fresh waiting public room
+      // Look for a fresh waiting public room (exclude stale placeholder rooms)
       const { data: waitingRooms, error: findError } = await supabase
         .from('game_rooms')
         .select('*')
@@ -67,9 +102,12 @@ class MatchmakingService {
         .eq('is_private', false)
         .eq('status', 'WAITING')
         .neq('host_id', user.userId)
-        .gt('created_at', oneMinuteAgo)
-        .order('created_at', { ascending: true })
+        .neq('player_1_name', 'Player 1')
+        .neq('player_1_name', 'Player')
+        .gt('created_at', thirtySecondsAgo)
+        .order('created_at', { ascending: false })
         .limit(1);
+
 
       if (!findError && Array.isArray(waitingRooms) && waitingRooms.length > 0) {
         const room = waitingRooms[0];
@@ -85,11 +123,12 @@ class MatchmakingService {
           .eq('id', room.id);
 
         // Resolve real host name & avatar from profiles if needed
-        let opponentName = room.player_1_name;
+        let opponentName = room.player_1_name || room.host_name;
         let opponentAvatar = room.avatar_id || room.player_1_avatar || '1';
         let opponentRating = 1200;
 
-        if (!opponentName || opponentName === 'Player 1' || opponentName === 'Player') {
+
+        if (!opponentName || opponentName === 'Player 1' || opponentName === 'Player' || opponentName === 'Guest Player') {
           try {
             const { data: hostProf } = await supabase
               .from('profiles')
@@ -97,11 +136,16 @@ class MatchmakingService {
               .eq('id', room.host_id)
               .single();
             if (hostProf) {
-              opponentName = hostProf.display_name || hostProf.name || hostProf.username || opponentName;
+              opponentName = hostProf.display_name || hostProf.name || (hostProf.username ? `@${hostProf.username}` : null);
               if (hostProf.avatar_id) opponentAvatar = hostProf.avatar_id;
               if (hostProf.rating) opponentRating = hostProf.rating;
             }
           } catch (e) {}
+        }
+
+        if (!opponentName) {
+          const suffix = room.host_id ? room.host_id.replace(/\D/g, '').slice(-3) || '99' : '99';
+          opponentName = `Grandmaster_${suffix}`;
         }
 
         // Create match record
@@ -111,7 +155,7 @@ class MatchmakingService {
             game_slug: cleanGameSlug,
             room_id: room.id,
             player_1_id: room.host_id,
-            player_1_name: opponentName || 'Player 1',
+            player_1_name: opponentName,
             player_2_id: user.userId,
             player_2_name: user.name,
             result: 'ACTIVE'
@@ -141,12 +185,13 @@ class MatchmakingService {
           room_id: room.id,
           role: 'O',
           opponent: {
-            name: opponentName || 'Challenger',
+            name: opponentName,
             avatarId: opponentAvatar,
             rating: opponentRating
           }
         };
       }
+
 
 
       // No waiting room found -> Create a new public waiting room
@@ -297,7 +342,7 @@ class MatchmakingService {
       let opponentAvatar = room.avatar_id || room.player_1_avatar || '1';
       let opponentRating = 1200;
 
-      if (!opponentName || opponentName === 'Player 1' || opponentName === 'Player') {
+      if (!opponentName || opponentName === 'Player 1' || opponentName === 'Player' || opponentName === 'Guest Player') {
         try {
           const { data: hostProf } = await supabase
             .from('profiles')
@@ -305,11 +350,16 @@ class MatchmakingService {
             .eq('id', room.host_id)
             .single();
           if (hostProf) {
-            opponentName = hostProf.display_name || hostProf.name || hostProf.username || opponentName;
+            opponentName = hostProf.display_name || hostProf.name || (hostProf.username ? `@${hostProf.username}` : null);
             if (hostProf.avatar_id) opponentAvatar = hostProf.avatar_id;
             if (hostProf.rating) opponentRating = hostProf.rating;
           }
         } catch (e) {}
+      }
+
+      if (!opponentName) {
+        const suffix = room.host_id ? room.host_id.replace(/\D/g, '').slice(-3) || '88' : '88';
+        opponentName = `Grandmaster_${suffix}`;
       }
 
       // Create Match Record
@@ -319,7 +369,7 @@ class MatchmakingService {
           game_slug: room.game_slug,
           room_id: room.id,
           player_1_id: room.host_id,
-          player_1_name: opponentName || 'Player 1',
+          player_1_name: opponentName,
           player_2_id: user.userId,
           player_2_name: user.name,
           result: 'ACTIVE'
@@ -349,11 +399,12 @@ class MatchmakingService {
         room_id: room.id,
         role: 'O',
         opponent: {
-          name: opponentName || 'Challenger',
+          name: opponentName,
           avatarId: opponentAvatar,
           rating: opponentRating
         }
       };
+
 
     } catch (err) {
       console.error('[Join Room Error]:', err);

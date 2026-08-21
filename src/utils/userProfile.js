@@ -36,14 +36,21 @@ const DEFAULT_GAME_STATS = {
   ludo: { rating: 1200, level: 1, xp: 0, wins: 0, losses: 0, draws: 0 }
 };
 
+export function generateDynamicGamerTag(idSuffix = '') {
+  const titles = ['Grandmaster', 'Champion', 'Tactician', 'Strategist', 'Apex', 'Vanguard', 'Knight', 'Ace', 'Shadow', 'Striker'];
+  const title = titles[Math.floor(Math.random() * titles.length)];
+  const num = idSuffix ? idSuffix.replace(/\D/g, '').slice(-3) || Math.floor(100 + Math.random() * 900) : Math.floor(100 + Math.random() * 900);
+  return `${title}_${num}`;
+}
+
 export function getUserProfile() {
   try {
     const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
     const parsed = securityEngine.safeJsonParse(raw, null);
     
     if (parsed) {
-      const isCustom = !!parsed.hasCustomName && parsed.name && parsed.name !== 'Guest Player';
-      const cleanName = isCustom ? parsed.name : 'Guest Player';
+      const generatedDefault = parsed.id ? `Player_${parsed.id.replace(/\D/g, '').slice(-4) || '77'}` : 'Player_77';
+      const cleanName = parsed.name || parsed.display_name || parsed.username || generatedDefault;
       const { sanitizedName } = securityEngine.validatePlayerName(cleanName);
 
       const gameStats = {
@@ -62,8 +69,7 @@ export function getUserProfile() {
       return {
         id: securityEngine.sanitizeText(parsed.id || 'guest_' + generateUUID().substring(0, 8), 36),
         name: sanitizedName,
-
-        gamertag: parsed.gamertag || null,
+        gamertag: parsed.gamertag || sanitizedName,
         avatarId: ['1', '2', '3', '4', '5', '6', '7', '8'].includes(parsed.avatarId) ? parsed.avatarId : '1',
         level: Math.max(1, Math.min(100, Number(parsed.level) || 1)),
         xp: Math.max(0, Math.min(100000, Number(parsed.xp) || 0)),
@@ -75,7 +81,7 @@ export function getUserProfile() {
         dailyStreak: totalMatches > 0 ? Math.max(0, Number(parsed.dailyStreak) || 0) : 0,
         lastStreakDate: parsed.lastStreakDate || null,
         isGuest: parsed.isGuest !== false,
-        hasCustomName: isCustom,
+        hasCustomName: !!parsed.hasCustomName,
         isNewUser: parsed.isNewUser === true,
         authProvider: parsed.authProvider || (parsed.email ? 'email' : 'guest'),
         gameStats,
@@ -87,10 +93,11 @@ export function getUserProfile() {
     // Default clean guest profile for brand new visitors
     const defaultAvatarId = '1';
     const defaultId = 'guest_' + generateUUID().substring(0, 8);
+    const initialGamerTag = generateDynamicGamerTag(defaultId);
     const defaultProfile = {
       id: defaultId,
-      name: 'Guest Player',
-      gamertag: null,
+      name: initialGamerTag,
+      gamertag: initialGamerTag,
       avatarId: defaultAvatarId,
       level: 1,
       xp: 0,
@@ -109,16 +116,20 @@ export function getUserProfile() {
       history: [],
       isRegistered: false
     };
+
     saveUserProfile(defaultProfile);
     return defaultProfile;
   } catch (e) {
+
+    const fallbackTag = generateDynamicGamerTag();
     return {
-      id: 'guest_fallback',
-      name: 'Guest Player',
-      gamertag: null,
+      id: 'guest_' + generateUUID().substring(0, 8),
+      name: fallbackTag,
+      gamertag: fallbackTag,
       avatarId: '1',
       level: 1,
       xp: 0,
+
       rating: 1200,
       wins: 0,
       losses: 0,
@@ -140,8 +151,8 @@ export function getUserProfile() {
 
 export function saveUserProfile(updated) {
   try {
-    if (!updated || typeof updated !== 'object') return;
-    const { sanitizedName } = securityEngine.validatePlayerName(updated.name || 'Player');
+    const { sanitizedName } = securityEngine.validatePlayerName(updated.name || '');
+
 
     const gameStats = {
       gomoku: { ...DEFAULT_GAME_STATS.gomoku, ...(updated.gameStats?.gomoku || {}) },

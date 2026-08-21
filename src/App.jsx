@@ -249,8 +249,15 @@ function MainApp() {
   const [isExitConfirmOpen, setIsExitConfirmOpen] = useState(false);
   const [isCurrentMatchFinished, setIsCurrentMatchFinished] = useState(false);
   const [gameLaunchLoading, setGameLaunchLoading] = useState(null);
-  const [isGuestNamePromptOpen, setIsGuestNamePromptOpen] = useState(false);
+  const [isGuestNamePromptOpen, setIsGuestNamePromptOpen] = useState(() => {
+    const prof = getUserProfile();
+    const isGameRoute = initialRoute.gameId && initialRoute.gameId !== 'home';
+    const isGuestWithoutName = (!prof?.hasCustomName || !prof?.name) && !prof?.email;
+    return Boolean(isGameRoute && isGuestWithoutName);
+  });
   const pendingGuestActionRef = useRef(null);
+
+
   const [pendingAction, setPendingAction] = useState(null);
 
 
@@ -459,10 +466,10 @@ function MainApp() {
 
 
 
-  // Helper to ensure guest has entered a nickname before joining any match
+  // Helper to ensure player has entered their real GamerTag before entering any game or match
   const checkGuestNameBeforeAction = (actionCallback) => {
     const currentProf = getUserProfile();
-    const isGuestWithoutName = (!currentProf?.hasCustomName || currentProf?.name === 'Guest Player') && !currentProf?.email;
+    const isGuestWithoutName = (!currentProf?.hasCustomName || !currentProf?.name) && !currentProf?.email;
     if (isGuestWithoutName) {
       pendingGuestActionRef.current = actionCallback;
       setIsGuestNamePromptOpen(true);
@@ -484,6 +491,17 @@ function MainApp() {
     }
   };
 
+  const handleCloseGuestPrompt = () => {
+    setIsGuestNamePromptOpen(false);
+    pendingGuestActionRef.current = null;
+    // If currently on a game page without a valid name, return to home arena
+    const currentProf = getUserProfile();
+    if ((!currentProf?.hasCustomName || !currentProf?.name) && !currentProf?.email) {
+      if (activeGameId && activeGameId !== 'home') {
+        executeNavigate('home');
+      }
+    }
+  };
 
   const handleLocalPlayersConfirmed = (playerData) => {
     setLocalPlayerNames(playerData);
@@ -493,10 +511,11 @@ function MainApp() {
 
   // Navigate to dedicated game page with chosen mode & clean URL update
   const handleNavigate = (gameId, mode = 'LOBBY') => {
-    if (gameId !== 'home' && mode !== 'LOBBY') {
+    if (gameId !== 'home') {
       const allowed = checkGuestNameBeforeAction(() => handleNavigate(gameId, mode));
       if (!allowed) return;
     }
+
 
     // If starting a local 2P or 4P match without custom names, open local setup modal
     if ((mode === 'LOCAL_2P' || mode === 'LOCAL_4P') && gameId !== 'home') {
@@ -560,14 +579,10 @@ function MainApp() {
       try { sessionStorage.removeItem(ACTIVE_ONLINE_SESSION_KEY); } catch (e) {}
       window.history.pushState({}, '', '/');
     } else {
-      const modeSlug = mode === 'LOCAL_2P' ? 'local' : mode === 'LOCAL_4P' ? '4p' : mode === 'ONLINE_MATCH' ? 'online' : mode === 'SOLO_LEVELS' ? 'campaign' : mode === 'LOBBY' ? '' : 'ai';
-      if (!modeSlug) {
-        window.history.pushState({}, '', `/${gameId}`);
-      } else {
-        window.history.pushState({}, '', `/${gameId}?mode=${modeSlug}`);
-      }
+      window.history.pushState({}, '', `/${gameId}`);
     }
   };
+
 
 
 
@@ -740,15 +755,11 @@ function MainApp() {
     setActivePage(null);
 
     if (activeGameId && activeGameId !== 'home') {
-      const modeSlug = activeGameMode === 'LOCAL_2P' ? 'local' : activeGameMode === 'ONLINE_MATCH' ? 'online' : activeGameMode === 'LOBBY' ? '' : 'ai';
-      if (!modeSlug) {
-        window.history.pushState({}, '', `/${activeGameId}`);
-      } else {
-        window.history.pushState({}, '', `/${activeGameId}?mode=${modeSlug}`);
-      }
+      window.history.pushState({}, '', `/${activeGameId}`);
     } else {
       window.history.pushState({}, '', '/');
     }
+
   };
 
 
@@ -786,13 +797,15 @@ function MainApp() {
   }, [profile?.name, profile?.rating, profile?.level]);
 
   // Update Match Records and User Career Rating
-  const handleMatchFinished = (gameKey, outcome, opponentName = 'Opponent') => {
+  const handleMatchFinished = (gameKey, outcome, opponentName = '') => {
     setIsCurrentMatchFinished(true);
     const { profile: updatedProfile } = recordMatchResult(
       gameKey,
       outcome,
       opponentName
     );
+
+
 
 
     if (updatedProfile) {
@@ -1361,13 +1374,14 @@ function MainApp() {
       />
 
 
-      {/* PaperGames.io Guest Nickname Onboarding Modal */}
+      {/* Mandatory Real GamerTag Onboarding Modal */}
       <GuestNamePromptModal
         isOpen={isGuestNamePromptOpen}
-        onClose={() => setIsGuestNamePromptOpen(false)}
+        onClose={handleCloseGuestPrompt}
         currentUserProfile={profile}
         onNameSaved={handleGuestNameSaved}
       />
+
 
       {/* Local 2-Player & Multiplayer Real Names Setup Modal */}
       <LocalPlayersSetupModal

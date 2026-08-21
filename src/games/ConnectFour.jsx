@@ -227,8 +227,10 @@ export default function ConnectFour({
   });
 
   const [timeLeft, setTimeLeft] = useState(30);
-  const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || { name: 'Opponent', avatarId: '2', rating: 1200 });
+  const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || null);
+
   const [incomingReaction, setIncomingReaction] = useState(null);
+
   const [incomingChat, setIncomingChat] = useState(null);
   const [rematchStatus, setRematchStatus] = useState('IDLE'); // 'IDLE' | 'OFFERED' | 'RECEIVED' | 'ACCEPTED' | 'DECLINED' | 'OPPONENT_LEFT'
 
@@ -346,9 +348,10 @@ export default function ConnectFour({
     }
 
     if (onMatchFinished) {
-      onMatchFinished('connect4', outcome, opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent'));
+      onMatchFinished('connect4', outcome, opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2));
     }
-  }, [gameMode, onMatchFinished, opponentProfile?.name]);
+  }, [gameMode, onMatchFinished, opponentProfile?.name, localPlayerNames?.p2]);
+
 
 
   const handleFinalizeMatchRef = useRef(handleFinalizeMatch);
@@ -617,11 +620,12 @@ export default function ConnectFour({
 
               if (oppProfile) {
                 setOpponentProfile({
-                  name: oppProfile.display_name || oppProfile.username || 'Opponent',
+                  name: oppProfile.display_name || oppProfile.name || (oppProfile.username ? `@${oppProfile.username}` : ''),
                   avatarId: oppProfile.avatar_url || '2',
                   rating: 1200
                 });
               }
+
             }
 
             if (matchData.result === 'FINISHED' || matchData.result === 'DRAW') {
@@ -1255,28 +1259,36 @@ export default function ConnectFour({
       {/* Dual Player Bar & Series Tracker */}
       <div style={{ width: '100%', position: 'relative' }}>
         <MatchPlayerBar
-          p1Name={isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)}
+          p1Name={profile?.display_name || profile?.name}
           p1AvatarId={profile?.avatarId || '1'}
           p1Rating={profile?.rating || 1200}
           p1Score={scores.red}
-          p1Symbol="RED DISC"
-          p1Color="#ef4444"
-          p2Name={isOnline ? opponentProfile?.name : (gameMode === 'VS_COMPUTER' ? (aiDifficulty === 'HARD' ? 'Grandmaster AI' : aiDifficulty === 'MEDIUM' ? 'Smart AI' : 'Casual AI') : (localPlayerNames?.p2 || 'Opponent'))}
+          p1Symbol={isOnline ? (myRole === RED ? 'RED DISC' : 'YELLOW DISC') : 'RED DISC'}
+          p1Color={isOnline ? (myRole === RED ? '#ef4444' : '#eab308') : '#ef4444'}
+          p2Name={isOnline ? (opponentProfile?.display_name || opponentProfile?.name) : (gameMode === 'VS_COMPUTER' ? (aiDifficulty === 'HARD' ? 'Grandmaster AI' : aiDifficulty === 'MEDIUM' ? 'Smart AI' : 'Casual AI') : localPlayerNames?.p2)}
           p2AvatarId={isOnline ? (opponentProfile?.avatarId || '2') : '2'}
           p2Rating={isOnline ? (opponentProfile?.rating || 1200) : (aiDifficulty === 'HARD' ? 1750 : aiDifficulty === 'MEDIUM' ? 1400 : 1100)}
           p2Score={scores.yellow}
-          p2Symbol="YELLOW DISC"
-          p2Color="#eab308"
+          p2Symbol={isOnline ? (myRole === RED ? 'YELLOW DISC' : 'RED DISC') : 'YELLOW DISC'}
+          p2Color={isOnline ? (myRole === RED ? '#eab308' : '#ef4444') : '#eab308'}
           isP1Turn={isMyTurn}
           isGameOver={!!winner}
           gameMode={gameMode}
           winnerText={
-            winner === RED ? `${isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)} Won!` :
-            winner === YELLOW ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${isOnline ? opponentProfile?.name : (localPlayerNames?.p2 || 'Opponent')} Won!`) :
-            winner === 'DRAW' ? 'Draw Match!' : null
+            isOnline ? (
+              winner === myRole ? `${profile?.display_name || profile?.name} Won!` :
+              winner && winner !== 'DRAW' ? `${opponentProfile?.display_name || opponentProfile?.name} Won!` :
+              winner === 'DRAW' ? 'Draw Match!' : null
+            ) : (
+              winner === RED ? `${gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name} Won!` :
+              winner === YELLOW ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${localPlayerNames?.p2} Won!`) :
+              winner === 'DRAW' ? 'Draw Match!' : null
+            )
           }
           timeLeft={timeLeft}
         />
+
+
 
 
 
@@ -1623,8 +1635,9 @@ export default function ConnectFour({
           onGoHome={handleGoHome}
           isOnline={isOnline}
           rematchStatus={rematchStatus}
-          opponentName={opponentProfile?.name || 'Opponent'}
+          opponentName={opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2)}
         />
+
       )}
 
 

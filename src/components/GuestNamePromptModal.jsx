@@ -186,21 +186,22 @@ export default function GuestNamePromptModal({
             </div>
           </div>
 
-          {/* Guest Storage Note */}
+          {/* Instant Play Perk Note */}
           <div style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
+            background: '#F0FDF4',
+            border: '1px solid #BBF7D0',
             borderRadius: '10px',
-            padding: '8px 10px',
+            padding: '8px 12px',
             display: 'flex',
             alignItems: 'center',
             gap: '8px'
           }}>
-            <Shield size={14} color="#64748B" style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: '11px', color: '#64748B', lineHeight: '1.3' }}>
-              Guest scores are saved locally on this browser. Create an account anytime to rank on the Global Leaderboard.
+            <Shield size={14} color="#16A34A" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: '11px', color: '#166534', fontWeight: '700', lineHeight: '1.3' }}>
+              Instant Play active! Create a free account anytime to secure your GamerTag and climb the Global Top 50.
             </span>
           </div>
+
 
           {/* Submit Button */}
           <button

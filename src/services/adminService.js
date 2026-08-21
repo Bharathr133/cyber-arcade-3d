@@ -113,9 +113,10 @@ class AdminService {
 
         return {
           id: u.id,
-          username: u.display_name || 'Player',
-          display_name: u.display_name || 'Player',
+          username: u.display_name || u.name || (u.email ? u.email.split('@')[0] : ''),
+          display_name: u.display_name || u.name || '',
           email: u.email || '',
+
           avatar_id: u.avatar_id || u.avatarId || 1,
 
           rating,
@@ -399,11 +400,12 @@ class AdminService {
       return data.map(m => ({
         id: m.id,
         gameSlug: m.game_slug,
-        player1Name: m.player_1_name || 'Player 1',
-        player2Name: m.player_2_name || 'Player 2',
+        player1Name: m.player_1_name || '',
+        player2Name: m.player_2_name || '',
         result: m.result, // 'WIN', 'LOSS', 'DRAW'
         winnerName: m.winner_name || (m.result === 'WIN' ? m.player_1_name : m.result === 'LOSS' ? m.player_2_name : 'Draw'),
         createdAt: m.created_at || new Date().toISOString()
+
       }));
     } catch (e) {
       return [];

@@ -17,8 +17,10 @@ export const feedbackNotifier = {
           category,
           email: email ? email.trim() : null,
           message: message ? message.trim() : '',
-          playerName: playerName || 'Guest Player',
+          playerName,
           rating: rating || 1200
+
+
         })
       });
 

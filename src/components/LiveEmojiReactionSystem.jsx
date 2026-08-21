@@ -52,7 +52,7 @@ export default function LiveEmojiReactionSystem({
       if (incomingReaction.senderId && userId && incomingReaction.senderId === userId) {
         return;
       }
-      spawnReaction(incomingReaction.emoji, incomingReaction.sender || 'Opponent', false);
+      spawnReaction(incomingReaction.emoji, incomingReaction.sender, false);
     }
   }, [incomingReaction, userId]);
 
@@ -66,9 +66,11 @@ export default function LiveEmojiReactionSystem({
       const newBubble = {
         id: bubbleId,
         text: incomingChat.phrase,
-        sender: incomingChat.sender || 'Opponent',
+        sender: incomingChat.sender,
         isSelf: false
       };
+
+
 
       setActiveSpeechBubbles(prev => [...prev.slice(-1), newBubble]);
 

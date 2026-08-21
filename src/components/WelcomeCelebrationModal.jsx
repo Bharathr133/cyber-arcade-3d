@@ -26,8 +26,10 @@ export default function WelcomeCelebrationModal({
 
   if (!isOpen) return null;
 
-  const playerName = profile?.name || 'Player';
+  const playerName = profile?.name;
   const playerRating = profile?.rating || 1200;
+
+
 
   return createPortal(
     <div

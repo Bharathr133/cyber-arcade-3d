@@ -129,11 +129,12 @@ export default function OnlineMatchmakingModal({
     setSearchSecondsLeft(25);
     setCountdown(12);
 
-    const activeName = currentUserProfile?.display_name || currentUserProfile?.name || currentUserProfile?.username || (currentUserProfile?.email ? currentUserProfile.email.split('@')[0] : 'Player');
+    const activeName = currentUserProfile?.display_name || currentUserProfile?.name || currentUserProfile?.username || (currentUserProfile?.email ? currentUserProfile.email.split('@')[0] : '');
     setPlayerName(activeName);
     setAvatarId(currentUserProfile?.avatarId || '1');
 
     startMatchmakingFlow(mode, activeName, currentUserProfile?.avatarId || '1');
+
 
     return () => {
       isCancelledRef.current = true;
@@ -160,7 +161,41 @@ export default function OnlineMatchmakingModal({
         if (result?.status === 'MATCH_READY') {
           const matchId = result.match_id || result.matchId;
           const roomId = result.room_id || result.roomId;
-          const realOpponent = result.opponent || { name: 'Challenger', avatarId: '1', rating: 1200 };
+          let realOpponent = result.opponent || { name: '', avatarId: '1', rating: 1200 };
+
+          // If opponent name is missing, query real match & profile record
+          if (!realOpponent?.name) {
+            try {
+              const supabase = getSupabase();
+              if (supabase && matchId) {
+                const { data: matchRec } = await supabase
+                  .from('matches')
+                  .select('player_1_id, player_1_name, player_2_id, player_2_name')
+                  .eq('id', matchId)
+                  .single();
+                if (matchRec) {
+                  const isHost = matchRec.player_1_id === currentUserProfile?.id;
+                  const oppId = isHost ? matchRec.player_2_id : matchRec.player_1_id;
+                  const oppName = isHost ? matchRec.player_2_name : matchRec.player_1_name;
+
+                  if (oppId) {
+                    const { data: prof } = await supabase
+                      .from('profiles')
+                      .select('name, display_name, username, avatar_id, rating')
+                      .eq('id', oppId)
+                      .single();
+                    if (prof) {
+                      realOpponent.name = prof.display_name || prof.name || (prof.username ? `@${prof.username}` : null) || oppName;
+                      realOpponent.avatarId = prof.avatar_id || realOpponent.avatarId;
+                      realOpponent.rating = prof.rating || realOpponent.rating;
+                    }
+                  }
+                  if (!realOpponent.name && oppName) realOpponent.name = oppName;
+                }
+              }
+            } catch (e) {}
+          }
+
 
           const lobby = {
             matchId,
@@ -196,15 +231,33 @@ export default function OnlineMatchmakingModal({
           setStatus('SEARCHING');
 
           realtimeManager.subscribeToRoom(currentRoom.id, currentUserProfile?.id, {
-            onPlayerJoined: (payload) => {
+            onPlayerJoined: async (payload) => {
               const opp = payload?.opponent || {};
-              const oppName = opp.name || opp.display_name || (opp.username ? `@${opp.username}` : 'Challenger');
+              let oppName = opp.name || opp.display_name || (opp.username ? `@${opp.username}` : null);
+
+              if (!oppName) {
+                try {
+                  const supabase = getSupabase();
+                  if (supabase && payload.match_id) {
+                    const { data: matchRec } = await supabase
+                      .from('matches')
+                      .select('player_1_id, player_1_name, player_2_id, player_2_name')
+                      .eq('id', payload.match_id)
+                      .single();
+                    if (matchRec) {
+                      oppName = matchRec.player_2_name;
+                    }
+                  }
+                } catch (e) {}
+              }
+
+
               const lobby = {
                 matchId: payload.match_id,
                 roomId: currentRoom.id,
                 myRole: 'X',
                 opponent: {
-                  name: oppName,
+                  name: oppName || 'Rival',
                   avatarId: opp.avatarId || '2',
                   rating: opp.rating || 1200
                 }
@@ -217,7 +270,8 @@ export default function OnlineMatchmakingModal({
               triggerLaunchGame(matchLobbyDataRef.current);
             }
           });
-        } else if (result?.error) {
+        }
+ else if (result?.error) {
           setStatus('ERROR');
           const formatted = formatErrorMessage(result.error, 'Matchmaking');
           setErrorMessage(formatted.message);
@@ -556,8 +610,9 @@ export default function OnlineMatchmakingModal({
                 </div>
                 <div>
                   <div style={{ fontSize: '13px', fontWeight: '900', color: '#0f172a' }}>
-                    {playerName || 'Player'}
+                    {playerName}
                   </div>
+
                   <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
                     Match Profile
                   </div>
@@ -808,10 +863,10 @@ export default function OnlineMatchmakingModal({
                   fontSize: '20px', fontWeight: '900', margin: '0 auto 8px',
                   boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
                 }}>
-                  {playerName?.[0]?.toUpperCase() || 'P1'}
+                  {playerName?.[0]?.toUpperCase() || 'P'}
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: '900', color: '#0f172a' }}>
-                  {playerName || 'Player 1'}
+                  {playerName}
                 </div>
                 <div style={{
                   display: 'inline-block', fontSize: '11px', color: '#2563eb',
@@ -846,11 +901,14 @@ export default function OnlineMatchmakingModal({
                   fontSize: '20px', fontWeight: '900', margin: '0 auto 8px',
                   boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
                 }}>
-                  {matchLobbyData.opponent?.name?.[0]?.toUpperCase() || 'P2'}
+                  {matchLobbyData.opponent?.name?.[0]?.toUpperCase() || 'P'}
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: '900', color: '#0f172a' }}>
-                  {matchLobbyData.opponent?.name || 'Player 2'}
+                  {matchLobbyData.opponent?.name}
                 </div>
+
+
+
                 <div style={{
                   display: 'inline-block', fontSize: '11px', color: '#64748b',
                   fontWeight: '800', marginTop: '4px', background: '#f1f5f9',

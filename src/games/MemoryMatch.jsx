@@ -189,8 +189,11 @@ export default function MemoryMatch({
       soundSynth.playRotate();
       setFlippedIndices([]);
       isBusyRef.current = false;
-      const timedOutPlayer = currentTurn === 1 ? (profile?.name || 'Player 1') : (gameMode === 'VS_COMPUTER' ? 'AI Bot' : 'Player 2');
+      const p1Title = localPlayerNames?.p1 || profile?.display_name || profile?.name;
+      const p2Title = gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2;
+      const timedOutPlayer = currentTurn === 1 ? p1Title : p2Title;
       setTurnBannerMessage(`⏱️ ${timedOutPlayer} ran out of time! Turn passed.`);
+
 
       setTimeout(() => {
         setCurrentTurn(prev => (prev === 1 ? 2 : 1));
@@ -410,8 +413,9 @@ export default function MemoryMatch({
       });
 
       if (onMatchFinished) {
-        onMatchFinished('memory', outcome, gameMode === 'VS_COMPUTER' ? 'AI Bot' : 'Player 2');
+        onMatchFinished('memory', outcome, gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2);
       }
+
     }
   };
 
@@ -602,13 +606,13 @@ export default function MemoryMatch({
       ) : (
         // 2-Player Turn Match Status Bar
         <MatchPlayerBar
-          p1Name={localPlayerNames?.p1 || profile?.display_name || profile?.name || profile?.username || 'Player 1'}
+          p1Name={localPlayerNames?.p1 || profile?.display_name || profile?.name || 'You'}
           p1AvatarId={profile?.avatarId || '1'}
           p1Rating={profile?.rating || 1200}
           p1Score={p1Matches}
           p1Symbol="PAIRS"
           p1Color="#2563eb"
-          p2Name={gameMode === 'VS_COMPUTER' ? 'DeepMind AI' : (localPlayerNames?.p2 || 'Opponent')}
+          p2Name={gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2}
           p2AvatarId="2"
           p2Rating={gameMode === 'VS_COMPUTER' ? 1400 : 1200}
           p2Score={p2Matches}
@@ -617,10 +621,11 @@ export default function MemoryMatch({
           isP1Turn={currentTurn === 1}
           isGameOver={isGameOver}
           gameMode={gameMode}
-          winnerText={isGameOver ? (p1Matches > p2Matches ? `${localPlayerNames?.p1 || profile?.display_name || profile?.name || profile?.username || 'Player 1'} Won!` : p1Matches < p2Matches ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${localPlayerNames?.p2 || 'Opponent'} Won!`) : 'Tied Match!') : null}
+          winnerText={isGameOver ? (p1Matches > p2Matches ? `${localPlayerNames?.p1 || profile?.display_name || profile?.name || 'You'} Won!` : p1Matches < p2Matches ? (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI Won!' : `${localPlayerNames?.p2} Won!`) : 'Tied Match!') : null}
           timeLeft={timeLeft}
           maxTime={currentConfig.timeLimit}
         />
+
 
 
 

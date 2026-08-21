@@ -193,13 +193,20 @@ class RealtimeManager {
           const incomingVer = latestState.state_version || 0;
           const currentVer = this.localVersions.get(matchId) || 0;
           const isFinished = latestState.status && latestState.status !== 'ACTIVE';
-          if (incomingVer > currentVer || isFinished) {
-            this.localVersions.set(matchId, incomingVer);
+          const lastUpdated = this.activePollTimers.get(`${channelName}:last_updated`);
+          const hasNewTimestamp = latestState.updated_at && latestState.updated_at !== lastUpdated;
+
+          if (incomingVer > currentVer || hasNewTimestamp || isFinished) {
+            this.localVersions.set(matchId, Math.max(incomingVer, currentVer + 1));
+            if (latestState.updated_at) {
+              this.activePollTimers.set(`${channelName}:last_updated`, latestState.updated_at);
+            }
             if (callbacks.onStateUpdate) callbacks.onStateUpdate(latestState);
           }
         }
       } catch (e) {}
-    }, 1200);
+    }, 1000);
+
 
     this.activePollTimers.set(channelName, matchPollTimer);
     this.activeChannels.set(channelName, channel);
@@ -316,9 +323,10 @@ class RealtimeManager {
             .maybeSingle();
 
           if (oppProfile) {
-            oppName = oppProfile.display_name || oppProfile.name || oppProfile.username || 'Opponent';
+            oppName = oppProfile.display_name || oppProfile.name || (oppProfile.username ? `@${oppProfile.username}` : '') || oppName;
             oppAvatar = oppProfile.avatar_url || oppProfile.avatar_id || '2';
           }
+
         }
 
         const payload = {

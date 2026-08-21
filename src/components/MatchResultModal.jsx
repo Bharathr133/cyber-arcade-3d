@@ -10,8 +10,9 @@ export default function MatchResultModal({
   onClose,
   outcome, // 'WIN', 'LOSS', 'DRAW'
   gameTitle,
-  opponentName = 'Opponent',
+  opponentName = '',
   ratingDelta = 0,
+
   xpGained = 0,
   currentRating = 1200,
   level = 1,
@@ -207,8 +208,9 @@ export default function MatchResultModal({
           margin: '0 0 20px 0',
           lineHeight: 1.4
         }}>
-          {gameTitle} match against <strong>{opponentName}</strong> completed.
+          {opponentName ? `${gameTitle} match against ${opponentName} completed.` : `${gameTitle} match completed.`}
         </p>
+
 
         {/* Rewards & Rating Card */}
         <div style={{

@@ -329,7 +329,8 @@ class AuthService {
           const verifiedProfile = {
             id: user.id,
             email: user.email,
-            name: cloudData?.name || metadata.display_name || metadata.name || user.email?.split('@')[0] || 'Player',
+            name: cloudData?.name || metadata.display_name || metadata.name || (user.email ? user.email.split('@')[0] : ''),
+
             avatarId: cloudData?.avatarId || metadata.avatarId || '1',
             rating: cloudData?.rating || Number(metadata.rating) || 1200,
             level: cloudData?.level || Number(metadata.level) || 1,

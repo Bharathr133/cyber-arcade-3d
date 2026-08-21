@@ -26,8 +26,9 @@ class CloudSyncService {
         body: JSON.stringify({
           profile: {
             id: profile.id,
-            name: profile.name || 'Player',
+            name: profile.name,
             avatarId: profile.avatarId || '1',
+
             rating: profile.rating || 1200,
             level: profile.level || 1,
             xp: profile.xp || 0,

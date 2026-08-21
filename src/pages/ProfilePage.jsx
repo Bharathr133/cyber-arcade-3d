@@ -263,8 +263,9 @@ export default function ProfilePage({
                 fontFamily: 'var(--font-heading)',
                 letterSpacing: '-0.02em'
               }}>
-                {profile?.name || 'Guest Player'}
+                {profile?.display_name || profile?.name}
               </h1>
+
 
               {/* Status Badges */}
               <span style={{
@@ -709,8 +710,9 @@ export default function ProfilePage({
                     </span>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: '12px', fontWeight: '700', color: '#18181B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        vs {match.opponent || 'Opponent'}
+                        vs {match.opponent}
                       </div>
+
                       <div style={{ fontSize: '10px', color: '#71717A', fontFamily: 'var(--font-mono)' }}>
                         {match.gameName || match.gameKey}
                       </div>
@@ -750,16 +752,17 @@ export default function ProfilePage({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h2 style={{ fontSize: '15px', fontWeight: '800', color: '#18181B', margin: 0, fontFamily: 'var(--font-heading)' }}>
-              Account & Cloud Database Sync
+              {isRegistered ? 'Verified Cloud Profile & Career Sync' : 'Instant Guest Session'}
             </h2>
             <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#71717A' }}>
               {isRegistered ? (
-                <>Signed in as <strong style={{ color: '#18181B' }}>{profile?.email}</strong>. All ratings and match records are permanently saved to Supabase.</>
+                <>Signed in as <strong style={{ color: '#18181B' }}>{profile?.email}</strong>. Your career stats, unlocked achievements, and global ranking are securely synced across all devices.</>
               ) : (
-                <>You are playing as a Guest. Sign in to save your career ELO and compete on global leaderboards.</>
+                <>Instant Guest Session active. Create a free account anytime to secure your permanent GamerTag and claim your spot on the Global Leaderboard!</>
               )}
             </p>
           </div>
+
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             {isRegistered ? (

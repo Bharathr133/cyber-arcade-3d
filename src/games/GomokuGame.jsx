@@ -70,8 +70,10 @@ export default function GomokuGame({
   });
 
   const [timeLeft, setTimeLeft] = useState(turnTimeLimit || 30);
-  const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || { name: 'Opponent', avatarId: '2', rating: 1200 });
+  const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || null);
+
   const [incomingReaction, setIncomingReaction] = useState(null);
+
   const [incomingChat, setIncomingChat] = useState(null);
   const [rematchStatus, setRematchStatus] = useState('IDLE'); // 'IDLE' | 'OFFERED' | 'RECEIVED' | 'ACCEPTED' | 'DECLINED' | 'OPPONENT_LEFT'
 
@@ -181,9 +183,10 @@ export default function GomokuGame({
     }
 
     if (onMatchFinished) {
-      onMatchFinished('gomoku', outcome, opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent'));
+      onMatchFinished('gomoku', outcome, opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2));
     }
-  }, [gameMode, onMatchFinished, opponentProfile?.name]);
+  }, [gameMode, onMatchFinished, opponentProfile?.name, localPlayerNames?.p2]);
+
 
 
   const handleFinalizeMatchRef = useRef(handleFinalizeMatch);
@@ -445,11 +448,12 @@ export default function GomokuGame({
 
               if (oppProfile) {
                 setOpponentProfile({
-                  name: oppProfile.display_name || oppProfile.username || 'Opponent',
+                  name: oppProfile.display_name || oppProfile.name || (oppProfile.username ? `@${oppProfile.username}` : ''),
                   avatarId: oppProfile.avatar_url || '2',
                   rating: 1200
                 });
               }
+
             }
 
             if (matchData.result === 'FINISHED' || matchData.result === 'DRAW') {
@@ -905,28 +909,36 @@ export default function GomokuGame({
 
       {/* Dual Player Bar */}
       <MatchPlayerBar
-        p1Name={isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)}
+        p1Name={profile?.display_name || profile?.name}
         p1AvatarId={profile?.avatarId || '1'}
         p1Rating={profile?.rating || 1200}
         p1Score={scores.black}
-        p1Symbol="BLACK STONE"
-        p1Color="#0f172a"
-        p2Name={isOnline ? opponentProfile?.name : (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : (localPlayerNames?.p2 || 'Opponent'))}
+        p1Symbol={isOnline ? (myRole === BLACK ? 'BLACK STONE' : 'WHITE STONE') : 'BLACK STONE'}
+        p1Color={isOnline ? (myRole === BLACK ? '#0f172a' : '#94a3b8') : '#0f172a'}
+        p2Name={isOnline ? (opponentProfile?.display_name || opponentProfile?.name) : (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2)}
         p2AvatarId={isOnline ? (opponentProfile?.avatarId || '2') : '2'}
         p2Rating={isOnline ? (opponentProfile?.rating || 1200) : (gameMode === 'VS_COMPUTER' ? 1650 : 1200)}
         p2Score={scores.white}
-        p2Symbol="WHITE STONE"
-        p2Color="#94a3b8"
+        p2Symbol={isOnline ? (myRole === BLACK ? 'WHITE STONE' : 'BLACK STONE') : 'WHITE STONE'}
+        p2Color={isOnline ? (myRole === BLACK ? '#94a3b8' : '#0f172a') : '#94a3b8'}
         isP1Turn={isMyTurn}
         isGameOver={!!winner}
         gameMode={gameMode}
         winnerText={
-          winner === BLACK ? `${isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)} Won!` :
-          winner === WHITE ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${isOnline ? opponentProfile?.name : (localPlayerNames?.p2 || 'Opponent')} Won!`) :
-          winner === 'DRAW' ? 'Draw Match!' : null
+          isOnline ? (
+            winner === myRole ? `${profile?.display_name || profile?.name} Won!` :
+            winner && winner !== 'DRAW' ? `${opponentProfile?.display_name || opponentProfile?.name} Won!` :
+            winner === 'DRAW' ? 'Draw Match!' : null
+          ) : (
+            winner === BLACK ? `${gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name} Won!` :
+            winner === WHITE ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${localPlayerNames?.p2} Won!`) :
+            winner === 'DRAW' ? 'Draw Match!' : null
+          )
         }
         timeLeft={timeLeft}
       />
+
+
 
 
 
@@ -1054,8 +1066,9 @@ export default function GomokuGame({
           onGoHome={handleGoHome}
           isOnline={isOnline}
           rematchStatus={rematchStatus}
-          opponentName={opponentProfile?.name || 'Opponent'}
+          opponentName={opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2)}
         />
+
       )}
 
 

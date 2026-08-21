@@ -51,10 +51,11 @@ export default function SidebarGameOptionsPanel({
     if (selectedMode === 'LOCAL_2P' || selectedMode === 'LOCAL_4P') {
       const cleanP2 = p2NameInput.trim() || 'Friend';
       localNames = {
-        p1: currentName || 'Player 1',
+        p1: currentName,
         p2: cleanP2,
         count: isLudo ? 4 : 2
       };
+
       try {
         sessionStorage.setItem('arcade_local_players', JSON.stringify(localNames));
       } catch (err) {}

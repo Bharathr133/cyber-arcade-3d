@@ -38,8 +38,10 @@ class PresenceService {
 
     const local = userProfile || getUserProfile();
     this.currentUserId = local?.id || getLocalUUID();
-    const playerName = local?.name || 'Player';
+    const playerName = local?.name;
     const avatarId = local?.avatarId || '1';
+
+
 
     this.channel = supabase.channel('arcade_global_presence', {
       config: {
@@ -100,8 +102,10 @@ class PresenceService {
         const local = getUserProfile();
         await this.channel.track({
           userId: this.currentUserId,
-          name: local?.name || 'Player',
+          name: local?.name,
           avatarId: local?.avatarId || '1',
+
+
           gameId: gameId || null,
           onlineAt: new Date().toISOString()
         });

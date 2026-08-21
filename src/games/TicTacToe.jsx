@@ -63,8 +63,10 @@ export default function TicTacToe({
   });
 
   const [timeLeft, setTimeLeft] = useState(turnTimeLimit || 30);
-  const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || { name: 'Opponent', avatarId: '2', rating: 1200 });
+  const [opponentProfile, setOpponentProfile] = useState(onlineSession?.opponent || null);
+
   const [incomingReaction, setIncomingReaction] = useState(null);
+
   const [incomingChat, setIncomingChat] = useState(null);
   const [rematchStatus, setRematchStatus] = useState('IDLE'); // 'IDLE' | 'OFFERED' | 'RECEIVED' | 'ACCEPTED' | 'DECLINED' | 'OPPONENT_LEFT'
 
@@ -136,9 +138,10 @@ export default function TicTacToe({
     }
 
     if (onMatchFinished) {
-      onMatchFinished('tictactoe', outcome, opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Opponent'));
+      onMatchFinished('tictactoe', outcome, opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2));
     }
-  }, [gameMode, onMatchFinished, opponentProfile?.name]);
+  }, [gameMode, onMatchFinished, opponentProfile?.name, localPlayerNames?.p2]);
+
 
 
   const handleFinalizeMatchRef = useRef(handleFinalizeMatch);
@@ -393,11 +396,12 @@ export default function TicTacToe({
 
               if (oppProfile) {
                 setOpponentProfile({
-                  name: oppProfile.display_name || oppProfile.username || 'Opponent',
+                  name: oppProfile.display_name || oppProfile.name || (oppProfile.username ? `@${oppProfile.username}` : ''),
                   avatarId: oppProfile.avatar_url || '2',
                   rating: 1200
                 });
               }
+
             }
 
             if (matchData.result === 'FINISHED' || matchData.result === 'DRAW') {
@@ -865,28 +869,36 @@ export default function TicTacToe({
 
       {/* Dual Player Bar */}
       <MatchPlayerBar
-        p1Name={isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)}
+        p1Name={profile?.display_name || profile?.name}
         p1AvatarId={profile?.avatarId || '1'}
         p1Rating={profile?.rating || 1200}
         p1Score={scores.x}
-        p1Symbol="CROSS"
-        p1Color="#1e3a8a"
-        p2Name={isOnline ? opponentProfile?.name : (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : (localPlayerNames?.p2 || 'Opponent'))}
+        p1Symbol={isOnline ? (myRole === 'X' ? 'CROSS' : 'CIRCLE') : 'CROSS'}
+        p1Color={isOnline ? (myRole === 'X' ? '#1e3a8a' : '#881337') : '#1e3a8a'}
+        p2Name={isOnline ? (opponentProfile?.display_name || opponentProfile?.name) : (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2)}
         p2AvatarId={isOnline ? (opponentProfile?.avatarId || '2') : '2'}
         p2Rating={isOnline ? (opponentProfile?.rating || 1200) : (gameMode === 'VS_COMPUTER' ? 1450 : 1200)}
         p2Score={scores.o}
-        p2Symbol="CIRCLE"
-        p2Color="#881337"
+        p2Symbol={isOnline ? (myRole === 'X' ? 'CIRCLE' : 'CROSS') : 'CIRCLE'}
+        p2Color={isOnline ? (myRole === 'X' ? '#881337' : '#1e3a8a') : '#881337'}
         isP1Turn={isMyTurn}
         isGameOver={!!winner}
         gameMode={gameMode}
         winnerText={
-          winner === 'X' ? `${isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)} Won!` :
-          winner === 'O' ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${isOnline ? opponentProfile?.name : (localPlayerNames?.p2 || 'Opponent')} Won!`) :
-          winner === 'DRAW' ? 'Draw Match!' : null
+          isOnline ? (
+            winner === myRole ? `${profile?.display_name || profile?.name} Won!` :
+            winner && winner !== 'DRAW' ? `${opponentProfile?.display_name || opponentProfile?.name} Won!` :
+            winner === 'DRAW' ? 'Draw Match!' : null
+          ) : (
+            winner === 'X' ? `${gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name} Won!` :
+            winner === 'O' ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${localPlayerNames?.p2} Won!`) :
+            winner === 'DRAW' ? 'Draw Match!' : null
+          )
         }
         timeLeft={timeLeft}
       />
+
+
 
 
 
@@ -1007,8 +1019,9 @@ export default function TicTacToe({
           onGoHome={handleGoHome}
           isOnline={isOnline}
           rematchStatus={rematchStatus}
-          opponentName={opponentProfile?.name || 'Opponent'}
+          opponentName={opponentProfile?.name || (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : localPlayerNames?.p2)}
         />
+
       )}
 
 

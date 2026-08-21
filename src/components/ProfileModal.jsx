@@ -448,8 +448,9 @@ export default function ProfileModal({
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '15px', fontWeight: '900', color: '#0f172a' }}>
-                      {name || 'Player'}
+                      {name}
                     </span>
+
                     <span style={{
                       fontSize: '9px', fontWeight: '900', padding: '2px 6px',
                       borderRadius: '6px', background: currentTier.color, color: '#ffffff'

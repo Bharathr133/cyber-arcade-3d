@@ -161,9 +161,10 @@ export default function GlobalLeaderboardModal({
                   color: '#15803d', background: '#ecfdf5',
                   padding: '2px 6px', borderRadius: '4px'
                 }}>
-                  <Database size={10} />
-                  LIVE REAL-TIME DATABASE
+                  <Globe size={10} />
+                  OFFICIAL GLOBAL STANDINGS
                 </span>
+
               </div>
             </div>
           </div>
@@ -515,8 +516,9 @@ export default function GlobalLeaderboardModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
             <User size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
             <div style={{ fontSize: '12px', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {currentUserProfile?.name || 'Player'}:
+              {currentUserProfile?.display_name || currentUserProfile?.name}:
             </div>
+
             <span style={{ fontSize: '12px', color: currentUserProfile?.isRegistered ? '#38bdf8' : '#F59E0B', fontWeight: '900', fontFamily: 'var(--font-mono)' }}>
               {currentUserProfile?.isRegistered 
                 ? (myCurrentRank ? `Rank #${myCurrentRank.rank}` : 'Ranked Online Player')

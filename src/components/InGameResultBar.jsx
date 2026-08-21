@@ -15,8 +15,9 @@ export default function InGameResultBar({
   onGoHome,
   isOnline = false,
   rematchStatus = 'IDLE', // 'IDLE' | 'OFFERED' | 'RECEIVED' | 'ACCEPTED' | 'DECLINED' | 'OPPONENT_LEFT'
-  opponentName = 'Opponent'
+  opponentName = ''
 }) {
+
   if (!outcome) return null;
 
   const isWin = outcome === 'WIN';
