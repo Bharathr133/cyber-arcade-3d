@@ -67,7 +67,25 @@ class AuthService {
       });
 
       if (error) {
+        if (error.message?.includes('User already registered') || error.message?.includes('already been registered')) {
+          return {
+            success: false,
+            alreadyRegistered: true,
+            suggestGoogle: true,
+            error: 'An account with this email already exists. If you created it with Google, click "Continue with Google" to log in.'
+          };
+        }
         return { success: false, error: error.message };
+      }
+
+      // If Supabase returns empty identities, this email already exists under Google OAuth
+      if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        return {
+          success: false,
+          alreadyRegistered: true,
+          suggestGoogle: true,
+          error: 'An account with this email was created using Google Sign-In. Please click "Continue with Google" above to log in.'
+        };
       }
 
       // If Supabase has email confirmation enabled, session will be null until verified
@@ -79,6 +97,7 @@ class AuthService {
           message: 'Verification link sent! Please check your inbox to activate your account.'
         };
       }
+
 
       if (data?.user && data.session) {
         const guest = getUserProfile();
@@ -145,8 +164,19 @@ class AuthService {
             error: 'Your email address is not verified yet. Please check your inbox or click Resend below.'
           };
         }
+
+        const isInvalidCreds = error.message?.toLowerCase().includes('invalid login credentials') || error.status === 400;
+        if (isInvalidCreds) {
+          return {
+            success: false,
+            suggestGoogle: true,
+            error: 'Invalid email or password. If you originally signed up using Google, please click "Continue with Google" above.'
+          };
+        }
+
         return { success: false, error: error.message };
       }
+
 
       if (data?.user) {
         // Fetch persistent data from database
