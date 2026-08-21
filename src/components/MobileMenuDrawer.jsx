@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, Trophy, BarChart3, Settings, User, 
   KeyRound, ChevronRight, Zap, ShieldCheck, Flame, Compass, ArrowRight,
-  LogOut, LogIn
+  LogOut, LogIn, BookOpen
 } from 'lucide-react';
+
 import { AVATARS, getTier } from '../utils/userProfile.js';
 import { soundSynth } from '../utils/soundSynth.js';
 import { TicTacToeIcon, ConnectFourIcon, GomokuIcon, MemoryMatchIcon, LudoIcon } from './GameIcons.jsx';
 import { adminService } from '../services/adminService.js';
+import SidebarGameOptionsPanel from './SidebarGameOptionsPanel.jsx';
+
 
 export default function MobileMenuDrawer({
   isOpen,
@@ -18,25 +21,42 @@ export default function MobileMenuDrawer({
   onToggleSound,
   onOpenLeaderboard,
   onOpenSettings,
+  onOpenRules,
   onOpenProfile,
   onOpenAdmin,
   onSelectGame,
   onJoinPrivateRoom,
   onLogout,
   onNavigateToAuth
+
 }) {
-
-
   const [quickJoinCode, setQuickJoinCode] = useState('');
   const [joinSelectedGame, setJoinSelectedGame] = useState('connect4');
+  const [expandedGameId, setExpandedGameId] = useState(null);
+
+
+  // Prevent background body scrolling while mobile drawer is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const totalMatches = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
   const currentAvatar = AVATARS.find(a => a.id === profile?.avatarId) || AVATARS[0];
   const tier = getTier(profile?.rating || 1200, totalMatches);
+  const isRegistered = !profile?.isGuest && profile?.email;
+  const displayName = profile?.name || (profile?.email ? profile.email.split('@')[0] : 'Guest Player');
+  const displayInitial = (displayName && displayName[0]) ? displayName[0].toUpperCase() : 'G';
   const winRate = totalMatches > 0 ? Math.round(((profile?.wins || 0) / totalMatches) * 100) : 0;
   const currentXp = (profile?.xp || 0) % 100;
+
 
   const GAMES = [
     { id: 'connect4', title: 'Connect 4', tag: '7×6 GRID', badge: 'POPULAR', icon: ConnectFourIcon },
@@ -63,6 +83,7 @@ export default function MobileMenuDrawer({
   const drawerContent = (
     <div
       className="animate-drawer-backdrop"
+      onWheel={(e) => e.stopPropagation()}
       style={{
         position: 'fixed',
         top: 0,
@@ -76,16 +97,19 @@ export default function MobileMenuDrawer({
         WebkitBackdropFilter: 'blur(10px)',
         zIndex: 999999,
         display: 'flex',
-        justifyContent: 'flex-start'
+        justifyContent: 'flex-start',
+        overscrollBehavior: 'contain'
       }}
       onClick={onClose}
     >
       {/* Slide-in Drawer Container */}
       <div
         className="animate-drawer-panel"
+        onWheel={(e) => e.stopPropagation()}
         style={{
           width: 'min(86vw, 320px)',
           height: '100%',
+          maxHeight: '100vh',
           background: '#FFFFFF',
           color: '#18181B',
           boxShadow: '20px 0 50px rgba(0, 0, 0, 0.1)',
@@ -93,35 +117,48 @@ export default function MobileMenuDrawer({
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          padding: '18px 16px calc(18px + env(safe-area-inset-bottom, 0px))',
+          padding: '16px 14px calc(16px + env(safe-area-inset-bottom, 0px))',
           boxSizing: 'border-box',
-          overflowY: 'auto'
+          overflow: 'hidden',
+          overscrollBehavior: 'contain'
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Header & Content */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {/* Middle Scrollable Section (Header + Profile Card + Games) */}
+        <div 
+          style={{ 
+            flex: 1, 
+            minHeight: 0, 
+            overflowY: 'auto', 
+            overflowX: 'hidden',
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '14px',
+            paddingRight: '2px',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
           {/* Header Row: Title & Close Button */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{
-                width: '26px', height: '26px', borderRadius: '6px',
-                background: '#18181B', color: '#FFFFFF',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <Zap size={13} fill="#FFFFFF" />
-              </div>
+              <img 
+                src="/brand-logo.jpg" 
+                alt="games4u Logo" 
+                style={{ width: '28px', height: '28px', borderRadius: '7px', objectFit: 'cover' }}
+              />
               <span style={{
                 fontFamily: 'var(--font-heading)',
-                fontSize: '14px',
-                fontWeight: '800',
+                fontSize: '15px',
+                fontWeight: '900',
                 color: '#18181B',
                 letterSpacing: '-0.01em'
               }}>
                 games4u
               </span>
-
             </div>
+
 
             <button
               onClick={onClose}
@@ -151,22 +188,27 @@ export default function MobileMenuDrawer({
               >
                 <div style={{
                   width: '36px', height: '36px', borderRadius: '8px',
-                  background: '#18181B', color: '#FFFFFF',
+                  background: isRegistered ? 'linear-gradient(135deg, #2563EB, #1D4ED8)' : '#18181B', 
+                  color: '#FFFFFF',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800',
+                  boxShadow: isRegistered ? '0 2px 6px rgba(37,99,235,0.3)' : 'none',
                   flexShrink: 0
                 }}>
-                  {profile?.hasCustomName && profile?.name ? profile.name[0].toUpperCase() : 'G'}
+                  {displayInitial}
                 </div>
 
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ fontSize: '13px', fontWeight: '700', color: '#18181B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {profile?.hasCustomName ? profile.name : 'Guest'}
+                      {displayName}
                     </span>
                     <span style={{
                       fontSize: '8px', fontWeight: '700', padding: '1px 4px',
-                      borderRadius: '4px', background: '#E4E4E7', color: '#52525B',
+                      borderRadius: '4px', 
+                      background: isRegistered ? '#EFF6FF' : '#E4E4E7', 
+                      color: isRegistered ? '#2563EB' : '#52525B',
+                      border: isRegistered ? '1px solid #BFDBFE' : 'none',
                       fontFamily: 'var(--font-mono)'
                     }}>
                       {tier.name}
@@ -192,7 +234,65 @@ export default function MobileMenuDrawer({
                 <Settings size={14} />
               </button>
             </div>
+
+            {/* Quick Sign In / Sign Up Action Bar for Guests on Mobile */}
+            {!isRegistered && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '6px',
+                marginTop: '10px',
+                paddingTop: '10px',
+                borderTop: '1px solid #E4E4E7'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => handleActionClick(() => onNavigateToAuth ? onNavigateToAuth('login') : onOpenProfile())}
+
+                  style={{
+                    padding: '7px 8px',
+                    borderRadius: '8px',
+                    background: '#FFFFFF',
+                    border: '1px solid #D4D4D8',
+                    color: '#0F172A',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px'
+                  }}
+                >
+                  <LogIn size={12} color="#64748B" />
+                  <span>Log In</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleActionClick(() => onNavigateToAuth ? onNavigateToAuth('signup') : onOpenProfile())}
+                  style={{
+                    padding: '7px 8px',
+                    borderRadius: '8px',
+                    background: '#2563EB',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    boxShadow: '0 2px 6px rgba(37,99,235,0.25)'
+                  }}
+                >
+                  <span>Sign Up</span>
+                </button>
+              </div>
+            )}
           </div>
+
 
           {/* Section: COMPETITIVE */}
           <div>
@@ -216,6 +316,42 @@ export default function MobileMenuDrawer({
                 </div>
                 <span style={{ fontSize: '9px', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', background: '#E4E4E7', color: '#52525B', fontFamily: 'var(--font-mono)' }}>
                   TOP 50
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleActionClick(onOpenRules)}
+                style={{
+                  width: '100%', padding: '9px 10px', borderRadius: '8px',
+                  background: '#F4F4F5', border: '1px solid #E4E4E7', color: '#18181B',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <BookOpen size={15} color="#2563EB" />
+                  <span style={{ fontSize: '12px', fontWeight: '700' }}>How to Play</span>
+                </div>
+                <span style={{ fontSize: '9px', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', background: '#EFF6FF', color: '#2563EB', fontFamily: 'var(--font-mono)' }}>
+                  RULES
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleActionClick(onOpenSettings)}
+                style={{
+                  width: '100%', padding: '9px 10px', borderRadius: '8px',
+                  background: '#F4F4F5', border: '1px solid #E4E4E7', color: '#18181B',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Settings size={15} color="#52525B" />
+                  <span style={{ fontSize: '12px', fontWeight: '700' }}>Match Settings</span>
+                </div>
+                <span style={{ fontSize: '9px', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', background: '#E4E4E7', color: '#52525B', fontFamily: 'var(--font-mono)' }}>
+                  CONFIG
                 </span>
               </button>
 
@@ -243,6 +379,7 @@ export default function MobileMenuDrawer({
 
 
 
+
           {/* Section: GAMES DIRECTORY */}
           <div>
             <div style={{ fontSize: '9px', fontWeight: '700', color: '#A1A1AA', letterSpacing: '0.06em', marginBottom: '6px', paddingLeft: '4px' }}>
@@ -257,6 +394,7 @@ export default function MobileMenuDrawer({
                   <button
                     key={g.id}
                     onClick={() => {
+                      soundSynth.playClick();
                       onClose();
                       onSelectGame(g.id);
                     }}
@@ -287,12 +425,15 @@ export default function MobileMenuDrawer({
                   </button>
                 );
               })}
+
             </div>
+
           </div>
         </div>
 
-        {/* Bottom Section: Quick Room Join */}
-        <div style={{ paddingTop: '12px', borderTop: '1px solid #E4E4E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* Bottom Section: Quick Room Join & Sign Out (Permanently Fixed at Bottom) */}
+        <div style={{ flexShrink: 0, paddingTop: '10px', marginTop: '6px', borderTop: '1px solid #E4E4E7', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
           <div style={{ background: '#F4F4F5', border: '1px solid #E4E4E7', borderRadius: '10px', padding: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -328,8 +469,9 @@ export default function MobileMenuDrawer({
                 type="text"
                 maxLength={6}
                 value={quickJoinCode}
-                onChange={(e) => setQuickJoinCode(e.target.value.toUpperCase())}
+                onChange={(e) => setQuickJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                 placeholder="6-LETTER CODE"
+
                 style={{
                   width: '100%', padding: '6px', borderRadius: '6px',
                   border: '1px solid #E4E4E7', fontSize: '11px', fontWeight: '700',
@@ -404,33 +546,11 @@ export default function MobileMenuDrawer({
                 <span>Sign Out</span>
               </button>
             </div>
-          ) : (
-            <button
-              onClick={() => handleActionClick(() => onNavigateToAuth ? onNavigateToAuth('login') : onOpenProfile())}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                background: '#2563EB',
-                border: 'none',
-                color: '#FFFFFF',
-                fontSize: '12px',
-                fontWeight: '700',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-                marginTop: '4px'
-              }}
-            >
-              <LogIn size={14} />
-              <span>Log In / Sign Up</span>
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
+
   );
 
 

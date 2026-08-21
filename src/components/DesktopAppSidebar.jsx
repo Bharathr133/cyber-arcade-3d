@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { 
   Trophy, BarChart3, Settings, KeyRound, PanelLeftClose, PanelLeftOpen,
-  ShieldCheck, Zap, Sparkles, User, Flame, Compass, Radio, ArrowRight,
-  LogOut, LogIn
+  ShieldCheck, Zap, User, Flame, Compass, Radio, ArrowRight,
+  LogOut, LogIn, BookOpen
 } from 'lucide-react';
+
+
 import { AVATARS, getTier } from '../utils/userProfile.js';
 import { soundSynth } from '../utils/soundSynth.js';
 import { TicTacToeIcon, ConnectFourIcon, GomokuIcon, MemoryMatchIcon, LudoIcon } from './GameIcons.jsx';
 import { adminService } from '../services/adminService.js';
+import SidebarGameOptionsPanel from './SidebarGameOptionsPanel.jsx';
 
 // Hover Connected Flyout Tooltip for Collapsed Sidebar
 function FlyoutTooltip({ title, subtitle, badge, badgeColor = 'blue' }) {
@@ -50,20 +53,27 @@ export default function DesktopAppSidebar({
   onStartQuickMatch,
   onOpenProfile,
   onOpenSettings,
+  onOpenRules,
   onOpenLeaderboard,
   onOpenAdmin,
   onLogout,
   onNavigateToAuth,
   onJoinPrivateRoom
+
 }) {
   const [localExpanded, setLocalExpanded] = useState(true);
   const isExpanded = controlledExpanded !== undefined ? controlledExpanded : localExpanded;
   const [quickJoinCode, setQuickJoinCode] = useState('');
   const [joinSelectedGame, setJoinSelectedGame] = useState('connect4');
+  const [expandedGameId, setExpandedGameId] = useState(null);
+
 
   const totalMatches = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
-  const currentAvatar = AVATARS.find(a => a.id === profile?.avatarId) || AVATARS[0];
   const tier = getTier(profile?.rating || 1200, totalMatches);
+  const isRegistered = !profile?.isGuest && profile?.email;
+  const displayName = profile?.name || (profile?.email ? profile.email.split('@')[0] : 'Guest Player');
+  const displayInitial = (displayName && displayName[0]) ? displayName[0].toUpperCase() : 'G';
+  const currentAvatar = AVATARS.find(a => a.id === profile?.avatarId) || AVATARS[0];
   const winRate = totalMatches > 0 ? Math.round(((profile?.wins || 0) / totalMatches) * 100) : 0;
   const currentXp = (profile?.xp || 0) % 100;
 
@@ -94,6 +104,7 @@ export default function DesktopAppSidebar({
   return (
     <aside
       className="desktop-only desktop-fixed-sidebar"
+      onWheel={(e) => e.stopPropagation()}
       style={{
         width: isExpanded ? '260px' : '72px',
         minWidth: isExpanded ? '260px' : '72px',
@@ -113,7 +124,8 @@ export default function DesktopAppSidebar({
         transition: 'width 0.25s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding 0.25s ease',
         flexShrink: 0,
         userSelect: 'none',
-        overflow: isExpanded ? 'hidden' : 'visible'
+        overflow: isExpanded ? 'hidden' : 'visible',
+        overscrollBehavior: 'contain'
       }}
     >
       {/* 1. TOP HEADER (Toggle Button & Brand) */}
@@ -132,12 +144,22 @@ export default function DesktopAppSidebar({
             >
               <PanelLeftClose size={15} />
             </button>
-            <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: '#18181B', letterSpacing: '-0.01em' }}>
-              games4u
-            </span>
-
+            <div 
+              onClick={() => onSelectGame('home')}
+              style={{ display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer' }}
+            >
+              <img 
+                src="/brand-logo.jpg" 
+                alt="games4u Logo" 
+                style={{ width: '22px', height: '22px', borderRadius: '6px', objectFit: 'cover' }}
+              />
+              <span style={{ fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800', color: '#18181B', letterSpacing: '-0.01em' }}>
+                games4u
+              </span>
+            </div>
           </div>
         ) : (
+
           <div className="sidebar-item-wrapper">
             <button
               onClick={toggleSidebar}
@@ -157,12 +179,15 @@ export default function DesktopAppSidebar({
 
       {/* 2. MIDDLE SCROLLABLE CONTAINER */}
       <div 
+        className="sidebar-scrollable-container"
         style={{
           flex: 1, minHeight: 0, overflowY: isExpanded ? 'auto' : 'visible', overflowX: 'visible',
           padding: '10px 0', display: 'flex', flexDirection: 'column', gap: '14px',
-          scrollbarWidth: 'none', msOverflowStyle: 'none'
+          scrollbarWidth: 'none', msOverflowStyle: 'none',
+          overscrollBehavior: 'contain'
         }}
       >
+
 
         {/* User Card */}
         {isExpanded ? (
@@ -182,22 +207,27 @@ export default function DesktopAppSidebar({
               >
                 <div style={{
                   width: '34px', height: '34px', borderRadius: '8px',
-                  background: activePage === 'profile' ? '#2563EB' : '#18181B', color: '#FFFFFF',
+                  background: isRegistered ? 'linear-gradient(135deg, #2563EB, #1D4ED8)' : (activePage === 'profile' ? '#2563EB' : '#18181B'), 
+                  color: '#FFFFFF',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontFamily: 'var(--font-heading)', fontSize: '13px', fontWeight: '800',
+                  boxShadow: isRegistered ? '0 2px 6px rgba(37,99,235,0.3)' : 'none',
                   flexShrink: 0
                 }}>
-                  {profile?.hasCustomName && profile?.name ? profile.name[0].toUpperCase() : 'G'}
+                  {displayInitial}
                 </div>
 
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{ fontSize: '12px', fontWeight: '700', color: '#18181B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {profile?.hasCustomName ? profile.name : 'Guest'}
+                      {displayName}
                     </span>
                     <span style={{
                       fontSize: '8px', fontWeight: '700', padding: '1px 4px',
-                      borderRadius: '4px', background: '#F4F4F5', color: '#52525B',
+                      borderRadius: '4px', 
+                      background: isRegistered ? '#EFF6FF' : '#F4F4F5', 
+                      color: isRegistered ? '#2563EB' : '#52525B',
+                      border: isRegistered ? '1px solid #BFDBFE' : 'none',
                       fontFamily: 'var(--font-mono)'
                     }}>
                       {tier.name}
@@ -225,8 +255,66 @@ export default function DesktopAppSidebar({
                 <Settings size={13} />
               </button>
             </div>
+
+            {/* Quick Sign In / Sign Up Action Bar for Guests */}
+            {!isRegistered && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '6px',
+                marginTop: '8px',
+                paddingTop: '8px',
+                borderTop: '1px solid #F4F4F5'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToAuth ? onNavigateToAuth('login') : onOpenProfile()}
+
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '7px',
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    color: '#0F172A',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px'
+                  }}
+                >
+                  <LogIn size={11} color="#64748B" />
+                  <span>Log In</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigateToAuth ? onNavigateToAuth('signup') : onOpenProfile()}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '7px',
+                    background: '#2563EB',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '5px',
+                    boxShadow: '0 1px 3px rgba(37,99,235,0.2)'
+                  }}
+                >
+                  <span>Sign Up</span>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
+
           <div className="sidebar-item-wrapper">
             <button
               onClick={onOpenProfile}
@@ -316,8 +404,71 @@ export default function DesktopAppSidebar({
               </div>
             )}
 
+            {/* Match Settings in Sidebar */}
+            <div className={isExpanded ? '' : 'sidebar-item-wrapper'}>
+              <button
+                onClick={onOpenSettings}
+                style={{
+                  width: '100%', padding: isExpanded ? '7px 8px' : '7px 0',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                  border: '1px solid transparent',
+                  color: '#52525B',
+                  display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center',
+                  fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Settings size={15} color="#52525B" />
+                  {isExpanded && <span>Match Settings</span>}
+                </div>
+                {isExpanded && (
+                  <span style={{ fontSize: '8px', fontWeight: '700', padding: '1px 4px', borderRadius: '4px', background: '#F4F4F5', color: '#71717A', fontFamily: 'var(--font-mono)' }}>
+                    CONFIG
+                  </span>
+                )}
+              </button>
+              {!isExpanded && (
+                <FlyoutTooltip title="Match Settings" subtitle="Timer & Match Preferences" badge="CONFIG" />
+              )}
+            </div>
+
+            {/* How to Play Rules in Sidebar */}
+            <div className={isExpanded ? '' : 'sidebar-item-wrapper'}>
+              <button
+                onClick={onOpenRules}
+                style={{
+                  width: '100%', padding: isExpanded ? '7px 8px' : '7px 0',
+                  borderRadius: '8px',
+                  background: 'transparent',
+                  border: '1px solid transparent',
+                  color: '#52525B',
+                  display: 'flex', alignItems: 'center', justifyContent: isExpanded ? 'space-between' : 'center',
+                  fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <BookOpen size={15} color="#52525B" />
+                  {isExpanded && <span>How to Play</span>}
+                </div>
+                {isExpanded && (
+                  <span style={{ fontSize: '8px', fontWeight: '700', padding: '1px 4px', borderRadius: '4px', background: '#EFF6FF', color: '#2563EB', fontFamily: 'var(--font-mono)' }}>
+                    RULES
+                  </span>
+                )}
+              </button>
+              {!isExpanded && (
+                <FlyoutTooltip title="How to Play" subtitle="5 Game Strategy Guides" badge="RULES" />
+              )}
+            </div>
+
           </div>
         </div>
+
+
+
 
 
         {/* Section: GAMES DIRECTORY */}
@@ -333,13 +484,15 @@ export default function DesktopAppSidebar({
             {GAMES.map((g) => {
               const IconComp = g.icon;
               const isActive = !activePage && activeGameId === g.id;
+              const isPanelOpen = expandedGameId === g.id && isExpanded;
+
 
               return (
                 <div key={g.id} className={isExpanded ? '' : 'sidebar-item-wrapper'}>
                   <button
                     onClick={() => {
-                      if (onSelectGame) onSelectGame(g.id);
-                      else onStartQuickMatch(g.id, g.title);
+                      soundSynth.playClick();
+                      onSelectGame(g.id);
                     }}
                     style={{
                       width: '100%', padding: isExpanded ? '7px 8px' : '7px 0',
@@ -368,12 +521,15 @@ export default function DesktopAppSidebar({
                       </span>
                     )}
                   </button>
+
                   {!isExpanded && (
                     <FlyoutTooltip title={g.title} subtitle={g.tag} badge={g.badge} />
                   )}
                 </div>
+
               );
             })}
+
           </div>
         </div>
       </div>
@@ -416,8 +572,9 @@ export default function DesktopAppSidebar({
                 type="text"
                 maxLength={6}
                 value={quickJoinCode}
-                onChange={(e) => setQuickJoinCode(e.target.value.toUpperCase())}
+                onChange={(e) => setQuickJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                 placeholder="6-LETTER CODE"
+
                 style={{
                   width: '100%', padding: '6px', borderRadius: '6px',
                   border: '1px solid #E4E4E7', fontSize: '11px', fontWeight: '700',
@@ -529,29 +686,7 @@ export default function DesktopAppSidebar({
             </div>
           )
         ) : (
-          isExpanded ? (
-            <button
-              onClick={() => onNavigateToAuth ? onNavigateToAuth('login') : onOpenProfile()}
-              style={{
-                width: '100%',
-                padding: '7px 10px',
-                borderRadius: '8px',
-                background: '#2563EB',
-                border: 'none',
-                color: '#FFFFFF',
-                fontSize: '11px',
-                fontWeight: '700',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              <LogIn size={13} />
-              <span>Log In / Sign Up</span>
-            </button>
-          ) : (
+          !isExpanded ? (
             <div className="sidebar-item-wrapper">
               <button
                 onClick={() => onNavigateToAuth ? onNavigateToAuth('login') : onOpenProfile()}
@@ -566,9 +701,10 @@ export default function DesktopAppSidebar({
               </button>
               <FlyoutTooltip title="Log In / Sign Up" subtitle="Save ratings & history" badge="FREE" />
             </div>
-          )
+          ) : null
         )}
       </div>
+
 
     </aside>
   );

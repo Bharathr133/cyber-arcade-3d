@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   RotateCcw, Trophy, Star, Shield, Crown, Anchor, Compass, 
   Key, Target, Flame, Gem, Rocket, Zap, Lock, ArrowRight, Play,
-  Clock, Award, Layers, Bot, User, Check, Heart, Globe, Cpu, Atom, Sparkles
+  Clock, Award, Layers, Bot, User, Check, Heart, Globe, Cpu, Atom
 } from 'lucide-react';
+
 import confetti from 'canvas-confetti';
 import { soundSynth } from '../utils/soundSynth.js';
 import MatchPlayerBar from '../components/MatchPlayerBar.jsx';
@@ -44,9 +45,11 @@ export const CAMPAIGN_LEVELS = [
 export default function MemoryMatch({
   profile,
   initialMode = 'SOLO_LEVELS', // 'SOLO_LEVELS', 'VS_COMPUTER', 'LOCAL_2P'
+  localPlayerNames = null,
   onMatchFinished,
   onGoHome
 }) {
+
   const [gameMode, setGameMode] = useState(initialMode);
 
   // Highest unlocked level saved in localStorage
@@ -385,7 +388,7 @@ export default function MemoryMatch({
       }
     } else {
       // 2P / AI Mode
-      const isWinner = finalP1Score >= finalP2Score;
+      const isWinner = finalP1Score > finalP2Score;
       const isDraw = finalP1Score === finalP2Score;
       const outcome = isDraw ? 'DRAW' : isWinner ? 'WIN' : 'LOSS';
 
@@ -395,6 +398,7 @@ export default function MemoryMatch({
         ratingDelta: outcome === 'WIN' ? 25 : outcome === 'LOSS' ? -15 : 0,
         xpGained: outcome === 'WIN' ? 60 : 20,
         stars: outcome === 'WIN' ? 3 : 1,
+
         moves: finalMoves,
         timeRemaining: timeLeft,
         reason: outcome === 'WIN' 
@@ -598,25 +602,29 @@ export default function MemoryMatch({
       ) : (
         // 2-Player Turn Match Status Bar
         <MatchPlayerBar
-          p1Name={profile?.name || 'You'}
+          p1Name={localPlayerNames?.p1 || profile?.display_name || profile?.name || profile?.username || 'Player 1'}
           p1AvatarId={profile?.avatarId || '1'}
           p1Rating={profile?.rating || 1200}
           p1Score={p1Matches}
           p1Symbol="PAIRS"
           p1Color="#2563eb"
-          p2Name={gameMode === 'VS_COMPUTER' ? 'Smart AI Bot' : 'Player 2'}
+          p2Name={gameMode === 'VS_COMPUTER' ? 'DeepMind AI' : (localPlayerNames?.p2 || 'Opponent')}
           p2AvatarId="2"
-          p2Rating={gameMode === 'VS_COMPUTER' ? 1200 : 1200}
+          p2Rating={gameMode === 'VS_COMPUTER' ? 1400 : 1200}
           p2Score={p2Matches}
           p2Symbol="PAIRS"
           p2Color="#dc2626"
           isP1Turn={currentTurn === 1}
           isGameOver={isGameOver}
           gameMode={gameMode}
-          winnerText={isGameOver ? (p1Matches > p2Matches ? 'YOU WON!' : p1Matches < p2Matches ? 'OPPONENT WON!' : 'TIED MATCH!') : null}
+          winnerText={isGameOver ? (p1Matches > p2Matches ? `${localPlayerNames?.p1 || profile?.display_name || profile?.name || profile?.username || 'Player 1'} Won!` : p1Matches < p2Matches ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${localPlayerNames?.p2 || 'Opponent'} Won!`) : 'Tied Match!') : null}
           timeLeft={timeLeft}
           maxTime={currentConfig.timeLimit}
         />
+
+
+
+
       )}
 
       {/* Turn Banner Message */}

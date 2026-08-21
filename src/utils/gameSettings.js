@@ -1,52 +1,88 @@
-// Per-User Game Settings & Preference Isolation Engine
-const GLOBAL_SETTINGS_KEY = 'championship_game_settings';
+// Per-Game Specific Settings & Customization Engine
 
-export const DEFAULT_SETTINGS = {
-  turnTimeLimit: 30,    // 15, 30, 45, 60, 0 (0 = unlimited)
-  playerBankMinutes: 5, // 1, 3, 5, 10, 0 (0 = unlimited)
-  firstPlayer: 'random' // 'p1', 'p2', 'random'
+export const GAME_SPECIFIC_DEFAULTS = {
+  connect4: {
+    turnTimeLimit: 30,
+    playerBankMinutes: 5,
+    firstPlayer: 'random',
+    aiDifficulty: 'HARD',
+    discTheme: 'CLASSIC'
+  },
+  tictactoe: {
+    turnTimeLimit: 15,
+    playerBankMinutes: 3,
+    firstPlayer: 'random',
+    aiDifficulty: 'HARD',
+    symbolStyle: 'NEON'
+  },
+  gomoku: {
+    turnTimeLimit: 30,
+    playerBankMinutes: 5,
+    firstPlayer: 'p1',
+    aiDifficulty: 'HARD',
+    boardTheme: 'WOOD'
+  },
+  memory: {
+    turnTimeLimit: 30,
+    gridSize: '4x4',
+    flipDuration: 1.0,
+    aiDifficulty: 'MEDIUM',
+    cardTheme: 'ARCADE'
+  },
+  ludo: {
+    turnTimeLimit: 20,
+    tokenCount: 4,
+    safeSquares: true,
+    aiDifficulty: 'MEDIUM',
+    animationSpeed: 'FAST'
+  }
 };
 
-function getStorageKey(userId) {
-  return userId ? `championship_settings_${userId}` : GLOBAL_SETTINGS_KEY;
+export function getPerGameSettings(gameId = 'connect4', userId = null) {
+  try {
+    const key = `arcade_settings_${gameId}${userId ? '_' + userId : ''}`;
+    const raw = localStorage.getItem(key);
+    const defaults = GAME_SPECIFIC_DEFAULTS[gameId] || GAME_SPECIFIC_DEFAULTS.connect4;
+    if (!raw) return { ...defaults };
+    return { ...defaults, ...JSON.parse(raw) };
+  } catch (e) {
+    return { ...(GAME_SPECIFIC_DEFAULTS[gameId] || GAME_SPECIFIC_DEFAULTS.connect4) };
+  }
 }
 
-export function getGameSettings(userId = null) {
+export function savePerGameSettings(gameId, newSettings, userId = null) {
   try {
-    const key = getStorageKey(userId);
-    let raw = localStorage.getItem(key);
-    if (!raw && userId) {
-      raw = localStorage.getItem(GLOBAL_SETTINGS_KEY);
-    }
-    if (!raw) return { ...DEFAULT_SETTINGS };
-
-    const parsed = JSON.parse(raw);
-    return {
-      turnTimeLimit: [15, 30, 45, 60, 0].includes(parsed.turnTimeLimit) ? parsed.turnTimeLimit : 30,
-      playerBankMinutes: [1, 3, 5, 10, 0].includes(parsed.playerBankMinutes) ? parsed.playerBankMinutes : 5,
-      firstPlayer: ['p1', 'p2', 'random'].includes(parsed.firstPlayer) ? parsed.firstPlayer : 'random'
-    };
+    const key = `arcade_settings_${gameId}${userId ? '_' + userId : ''}`;
+    const defaults = GAME_SPECIFIC_DEFAULTS[gameId] || GAME_SPECIFIC_DEFAULTS.connect4;
+    const merged = { ...defaults, ...newSettings };
+    localStorage.setItem(key, JSON.stringify(merged));
+    return merged;
   } catch (e) {
-    return { ...DEFAULT_SETTINGS };
+    return newSettings;
   }
+}
+
+// Backward-compatible general accessors
+export function getGameSettings(userId = null) {
+  return getPerGameSettings('connect4', userId);
 }
 
 export function saveGameSettings(settings, userId = null) {
-  try {
-    const safeSettings = {
-      turnTimeLimit: [15, 30, 45, 60, 0].includes(settings.turnTimeLimit) ? settings.turnTimeLimit : 30,
-      playerBankMinutes: [1, 3, 5, 10, 0].includes(settings.playerBankMinutes) ? settings.playerBankMinutes : 5,
-      firstPlayer: ['p1', 'p2', 'random'].includes(settings.firstPlayer) ? settings.firstPlayer : 'random'
-    };
-
-    const key = getStorageKey(userId);
-    localStorage.setItem(key, JSON.stringify(safeSettings));
-    // Only update global fallback when saving for anonymous (no userId)
-    if (!userId) {
-      localStorage.setItem(GLOBAL_SETTINGS_KEY, JSON.stringify(safeSettings));
-    }
-    return safeSettings;
-  } catch (e) {
-    return { ...DEFAULT_SETTINGS };
-  }
+  return savePerGameSettings('connect4', settings, userId);
 }
+
+export function saveSettingsToAllGames(baseSettings, userId = null) {
+  const games = ['connect4', 'tictactoe', 'gomoku', 'memory', 'ludo'];
+  const updatedAll = {};
+  games.forEach(gId => {
+    const existing = getPerGameSettings(gId, userId);
+    const updated = savePerGameSettings(gId, {
+      ...existing,
+      turnTimeLimit: baseSettings.turnTimeLimit !== undefined ? baseSettings.turnTimeLimit : existing.turnTimeLimit,
+      aiDifficulty: baseSettings.aiDifficulty !== undefined ? baseSettings.aiDifficulty : existing.aiDifficulty
+    }, userId);
+    updatedAll[gId] = updated;
+  });
+  return updatedAll;
+}
+

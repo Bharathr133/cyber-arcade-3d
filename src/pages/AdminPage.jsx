@@ -3,10 +3,13 @@ import {
   ShieldCheck, Users, Trophy, Download, Trash2, Edit3, Check, X, 
   RefreshCw, Search, Activity, Zap, AlertCircle, Swords, Radio,
   Megaphone, ShieldAlert, RotateCcw, ArrowLeft, ChevronLeft, ChevronRight,
-  Filter, Ban, CheckCircle2, AlertTriangle, Eye, Award, ExternalLink
+  Filter, Ban, CheckCircle2, AlertTriangle, Eye, Award, ExternalLink,
+  MessageSquare, Send, Bell
 } from 'lucide-react';
 import { adminService } from '../services/adminService.js';
+import { feedbackNotifier } from '../services/feedbackNotifier.js';
 import { soundSynth } from '../utils/soundSynth.js';
+
 import { useCustomAlert } from '../components/CustomAlertProvider.jsx';
 import { TicTacToeIcon, ConnectFourIcon, GomokuIcon, MemoryMatchIcon, LudoIcon } from '../components/GameIcons.jsx';
 
@@ -53,6 +56,16 @@ export default function AdminPage({
   const [broadcastType, setBroadcastType] = useState(broadcastConfig.type || 'info');
   const [broadcastActive, setBroadcastActive] = useState(broadcastConfig.active || false);
 
+  // Discord & Feedback State
+  const [discordWebhookInput, setDiscordWebhookInput] = useState(() => feedbackNotifier.getWebhookUrl() || '');
+  const [feedbackList, setFeedbackList] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('arcade_feedback_submissions') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+
   const isAuthorized = adminService.isAdmin(profile);
 
   // Load Metrics & Active Tab Data
@@ -83,6 +96,11 @@ export default function AdminPage({
       } else if (activeTab === 'MATCHES') {
         const matches = await adminService.fetchGlobalMatches({ limit: 40, gameFilter: matchGameFilter });
         setMatchLogs(matches);
+      } else if (activeTab === 'FEEDBACK') {
+        try {
+          const localItems = JSON.parse(localStorage.getItem('arcade_feedback_submissions') || '[]');
+          setFeedbackList(localItems);
+        } catch (e) {}
       } else if (activeTab === 'ANTICHEAT') {
         const flags = await adminService.scanAntiCheatAnomalies();
         setFlaggedUsers(flags);
@@ -102,6 +120,7 @@ export default function AdminPage({
     }
 
   }, [isAuthorized, activeTab, searchQuery, statusFilter, sortBy, sortOrder, currentPage, matchGameFilter, roomFilter]);
+
 
 
   useEffect(() => {
@@ -427,10 +446,12 @@ export default function AdminPage({
     { id: 'USERS', label: 'Players', icon: Users, badge: totalUsersCount || null },
     { id: 'ROOMS', label: 'Live Arenas', icon: Radio, badge: liveRooms.length || null },
     { id: 'MATCHES', label: 'Match History', icon: Swords },
+    { id: 'FEEDBACK', label: 'Discord & Tickets', icon: MessageSquare },
     { id: 'ANTICHEAT', label: 'Anti-Cheat', icon: ShieldAlert, badge: flaggedUsers.length > 0 ? flaggedUsers.length : null, badgeColor: 'bg-red-100 text-red-700' },
     { id: 'BROADCAST', label: 'Broadcast', icon: Megaphone, badge: broadcastConfig.active ? 'ACTIVE' : null, badgeColor: 'bg-green-100 text-green-700' },
     { id: 'EXPORT', label: 'Data Export', icon: Download }
   ];
+
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-16 flex flex-col gap-6 font-body text-zinc-900">
@@ -438,9 +459,11 @@ export default function AdminPage({
       {/* 1. Header Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-white border border-zinc-200 rounded-2xl shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center flex-shrink-0">
-            <ShieldCheck size={20} />
-          </div>
+          <img 
+            src="/brand-logo.jpg" 
+            alt="games4u Logo" 
+            className="w-11 h-11 rounded-xl object-cover border border-zinc-200 shadow-sm flex-shrink-0"
+          />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-extrabold text-zinc-900 font-heading tracking-tight m-0">
@@ -451,10 +474,12 @@ export default function AdminPage({
               </span>
             </div>
             <p className="text-xs text-zinc-500 m-0 mt-0.5">
-              Logged in as <strong className="text-zinc-800">{profile?.email}</strong> • Direct Supabase Database Connection
+              Logged in as <strong className="text-zinc-800">{profile?.display_name || profile?.name || 'Administrator'}</strong> • Authorized Operations Console
             </p>
           </div>
         </div>
+
+
 
         <div className="flex items-center gap-2">
           <button
@@ -1088,6 +1113,128 @@ export default function AdminPage({
         </div>
       )}
 
+      {/* TAB: FEEDBACK & DISCORD WEBHOOKS */}
+      {activeTab === 'FEEDBACK' && (
+        <div className="flex flex-col gap-6 animate-pop-in">
+          {/* Discord Webhook Config Card */}
+          <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center">
+                  <Bell size={20} />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-zinc-900 font-heading m-0">
+                    Discord Live Notification Webhook
+                  </h2>
+                  <p className="text-xs text-zinc-500 m-0">
+                    Receive instant push alerts on Discord whenever a player submits feedback or reports a bug
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-2">
+              <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 leading-relaxed font-medium">
+                🔒 <strong>Server-Side Secret Security:</strong> Your Discord Webhook is secured in your private backend environment (<code className="font-bold">DISCORD_WEBHOOK_URL</code> in <code className="font-bold">.env</code> &amp; Vercel Settings). It is never sent to or exposed in player web browsers.
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3 mt-1">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setLoading(true);
+                    const res = await feedbackNotifier.sendTestPing();
+                    setLoading(false);
+                    if (res.success) {
+                      soundSynth.playVictory();
+                      alert.show({
+                        type: 'success',
+                        title: 'Test Ping Dispatched!',
+                        message: 'Test alert sent through secure serverless backend. Check your Discord channel!'
+                      });
+                    } else {
+                      alert.show({
+                        type: 'warning',
+                        title: 'Webhook Ping Notice',
+                        message: 'Ensure DISCORD_WEBHOOK_URL is configured in your .env or Vercel Environment Variables.'
+                      });
+                    }
+                  }}
+                  className="btn-primary py-2.5 px-5 rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <Send size={13} />
+                  <span>Send Test Ping to Discord</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+
+          {/* Player Feedback Queue */}
+          <div className="p-6 bg-white border border-zinc-200 rounded-2xl shadow-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-zinc-900 font-heading m-0 flex items-center gap-2">
+                <MessageSquare size={16} className="text-blue-600" />
+                <span>Recent Player Tickets & Feedback ({feedbackList.length})</span>
+              </h3>
+
+              {feedbackList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('arcade_feedback_submissions');
+                    setFeedbackList([]);
+                    soundSynth.playRotate();
+                  }}
+                  className="text-xs font-bold text-red-600 hover:text-red-700 cursor-pointer"
+                >
+                  Clear Queue
+                </button>
+              )}
+            </div>
+
+            {feedbackList.length === 0 ? (
+              <div className="py-12 text-center text-xs text-zinc-400 font-medium">
+                No player tickets submitted yet. Any feedback from /contact will appear here and in your Discord channel.
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-100 flex flex-col">
+                {feedbackList.map((ticket, i) => (
+                  <div key={ticket.id || i} className="py-4 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-md ${
+                          ticket.type === 'BUG' ? 'bg-red-100 text-red-700 border border-red-200' :
+                          ticket.type === 'FEATURE' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                          ticket.type === 'QUESTION' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                          'bg-blue-100 text-blue-700 border border-blue-200'
+                        }`}>
+                          {ticket.type || 'FEEDBACK'}
+                        </span>
+                        <strong className="text-xs text-zinc-900 font-bold">{ticket.playerName}</strong>
+                        {ticket.rating && (
+                          <span className="text-[10px] font-mono text-zinc-400">({ticket.rating} ELO)</span>
+                        )}
+                        {ticket.email && (
+                          <span className="text-xs text-zinc-500 font-mono">✉️ {ticket.email}</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-400">
+                        {ticket.timestamp ? new Date(ticket.timestamp).toLocaleString() : ''}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-800 font-medium leading-relaxed">
+                      {ticket.message}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* TAB G: DATA EXPORT */}
       {activeTab === 'EXPORT' && (
@@ -1097,6 +1244,7 @@ export default function AdminPage({
               <Download size={16} className="text-blue-600" />
               <span>Platform Data Export Center</span>
             </h2>
+
             <p className="text-xs text-zinc-500 mb-6">
               Download clean CSV and JSON reports for analytics, offline player audits, and backup records.
             </p>

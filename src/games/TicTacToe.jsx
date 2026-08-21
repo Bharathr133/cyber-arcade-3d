@@ -29,12 +29,14 @@ export default function TicTacToe({
   profile, 
   initialMode = 'VS_COMPUTER', 
   onlineSession = null, 
+  localPlayerNames = null,
   settings, 
   onMatchFinished, 
   onGoHome 
 }) {
   const isOnline = initialMode === 'ONLINE_MATCH' && !!onlineSession?.matchId;
   const turnTimeLimit = settings?.turnTimeLimit !== undefined ? settings.turnTimeLimit : 30;
+
 
   const [initialState] = useState(() => isOnline ? DEFAULT_TTT_STATE : loadGameState('tictactoe', DEFAULT_TTT_STATE));
 
@@ -147,9 +149,59 @@ export default function TicTacToe({
     if (!isOnline || !onlineSession?.matchId) return;
 
     setMyRole(onlineSession.myRole || 'X');
-    if (onlineSession.opponent) setOpponentProfile(onlineSession.opponent);
+    if (onlineSession.opponent) {
+      setOpponentProfile(onlineSession.opponent);
+    }
 
     const matchId = onlineSession.matchId;
+
+    // Real-time Supabase Match & Opponent Profile Resolution
+    const resolveRealOpponent = async () => {
+      try {
+        const supabase = getSupabase();
+        if (!supabase) return;
+
+        const { data: match } = await supabase
+          .from('matches')
+          .select('player_1_id, player_1_name, player_2_id, player_2_name')
+          .eq('id', matchId)
+          .single();
+
+        if (match) {
+          const isPlayer1 = match.player_1_id === profile?.id;
+          const oppName = isPlayer1 ? match.player_2_name : match.player_1_name;
+          const oppId = isPlayer1 ? match.player_2_id : match.player_1_id;
+
+          if (oppName && oppName !== 'Opponent' && oppName !== 'Player 1' && oppName !== 'Player 2') {
+            setOpponentProfile(prev => ({ ...prev, name: oppName, id: oppId }));
+          }
+
+          if (oppId) {
+            const { data: oppProf } = await supabase
+              .from('profiles')
+              .select('name, display_name, username, avatar_id, rating')
+              .eq('id', oppId)
+              .single();
+
+            if (oppProf) {
+              const finalName = oppProf.display_name || oppProf.name || (oppProf.username ? `@${oppProf.username}` : null);
+              if (finalName) {
+                setOpponentProfile(prev => ({
+                  ...prev,
+                  name: finalName,
+                  avatarId: oppProf.avatar_id || prev.avatarId,
+                  rating: oppProf.rating || prev.rating,
+                  id: oppId
+                }));
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    };
+
+    resolveRealOpponent();
+
 
     realtimeManager.subscribeToMatch(matchId, profile?.id, {
       onReactionEmoji: (reactionData) => {
@@ -645,15 +697,11 @@ export default function TicTacToe({
         if (myTurnNow) {
           if (remainingSec <= 0) {
             clearInterval(timer);
-            const emptyIndices = [4, 0, 2, 6, 8, 1, 3, 5, 7].filter(i => !boardRef.current[i]);
-            if (emptyIndices.length > 0) {
-              handleClick(emptyIndices[0]);
-            } else {
-              handleFinalizeMatch('LOSS', 'Turn time expired');
-            }
+            // Official Competitive Rule: Timeout = Forfeit Loss (NO automatic moves)
+            handleFinalizeMatch('LOSS', 'Time expired (Timeout forfeit)');
           }
         } else {
-          // Opponent's turn: 4-second grace buffer past 0
+          // Opponent's turn: 4-second grace buffer past 0 for network latency
           if (remainingSec <= -4) {
             clearInterval(timer);
             handleFinalizeMatch('WIN', 'Opponent timed out');
@@ -664,13 +712,15 @@ export default function TicTacToe({
           clearInterval(timer);
           if (gameMode === 'VS_COMPUTER') {
             if (isXNextRef.current) {
-              handleFinalizeMatch('LOSS', 'Turn time expired');
+              handleFinalizeMatch('LOSS', 'Time expired');
             }
           } else if (gameMode === 'LOCAL_2P') {
-            setWinner(isXNextRef.current ? 'O' : 'X');
+            const timeOutWinner = isXNextRef.current ? 'O' : 'X';
+            setWinner(timeOutWinner);
           }
         }
       }
+
 
       if (remainingSec <= 5 && remainingSec > 0) {
         try { soundSynth.playRotate(); } catch (e) {}
@@ -815,15 +865,15 @@ export default function TicTacToe({
 
       {/* Dual Player Bar */}
       <MatchPlayerBar
-        p1Name={profile?.name || 'You'}
+        p1Name={isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)}
         p1AvatarId={profile?.avatarId || '1'}
         p1Rating={profile?.rating || 1200}
         p1Score={scores.x}
         p1Symbol="CROSS"
         p1Color="#1e3a8a"
-        p2Name={isOnline ? (opponentProfile?.name || 'Opponent') : (gameMode === 'VS_COMPUTER' ? 'Smart AI' : 'Player 2')}
+        p2Name={isOnline ? opponentProfile?.name : (gameMode === 'VS_COMPUTER' ? 'Grandmaster AI' : (localPlayerNames?.p2 || 'Opponent'))}
         p2AvatarId={isOnline ? (opponentProfile?.avatarId || '2') : '2'}
-        p2Rating={isOnline ? (opponentProfile?.rating || 1200) : 1200}
+        p2Rating={isOnline ? (opponentProfile?.rating || 1200) : (gameMode === 'VS_COMPUTER' ? 1450 : 1200)}
         p2Score={scores.o}
         p2Symbol="CIRCLE"
         p2Color="#881337"
@@ -831,12 +881,15 @@ export default function TicTacToe({
         isGameOver={!!winner}
         gameMode={gameMode}
         winnerText={
-          winner === 'X' ? (gameMode === 'VS_COMPUTER' ? 'YOU WIN' : 'X WINS') :
-          winner === 'O' ? (gameMode === 'VS_COMPUTER' ? 'AI WINS' : 'O WINS') :
-          winner === 'DRAW' ? 'DRAW' : null
+          winner === 'X' ? `${isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)} Won!` :
+          winner === 'O' ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${isOnline ? opponentProfile?.name : (localPlayerNames?.p2 || 'Opponent')} Won!`) :
+          winner === 'DRAW' ? 'Draw Match!' : null
         }
         timeLeft={timeLeft}
       />
+
+
+
 
       {/* 3x3 Grid Board with Center Emoji Reaction Mount */}
       <div style={{

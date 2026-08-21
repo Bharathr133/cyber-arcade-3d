@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Bot, User, Zap, Lock, Play, Layers, Dices, Users, Swords, Sparkles, Trophy, 
-  ArrowRight, ShieldCheck, Flame, Compass, ChevronDown, ChevronUp, Clock, Award, Globe, Radio, KeyRound
+  Bot, User, Zap, Lock, Play, Layers, Dices, Users, Swords, Trophy, 
+  ArrowRight, ShieldCheck, Flame, Compass, ChevronDown, ChevronUp, Clock, Award, Globe, Radio, KeyRound,
+  Brain, Sparkles, Lightbulb, CheckCircle2, Heart, Smile, PlayCircle
 } from 'lucide-react';
+
+
 import { TicTacToeIcon, ConnectFourIcon, GomokuIcon, MemoryMatchIcon, LudoIcon } from './GameIcons.jsx';
 import { presenceService } from '../services/presenceService.js';
 import { getTier } from '../utils/userProfile.js';
@@ -258,114 +261,17 @@ export default function ArcadeHomeScreen({
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 pb-8 box-border">
-      
-      {/* 1. BALANCED PREMIUM SLATE HERO BANNER */}
-      <div className="w-full rounded-2xl bg-slate-900 text-white p-6 sm:p-7 shadow-md border border-slate-800 relative overflow-hidden">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs font-black uppercase font-mono tracking-wider mb-2.5">
-              <Zap size={13} className="text-blue-400" />
-              <span>Realtime Strategy Arena</span>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black font-heading tracking-tight leading-tight m-0 text-white">
-              Play Classic Board Games <span className="text-blue-400">Live with Players Worldwide</span>
-            </h1>
-
-            <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-xl leading-relaxed">
-              Zero downloads. Instant matchmaking. Climb verified ELO ranks, challenge Grandmaster AI, or create private rooms to battle friends.
-            </p>
-
-            {/* Platform Metrics Bar */}
-            <div className="flex flex-wrap items-center gap-3 sm:gap-5 mt-4 pt-3.5 border-t border-slate-800 text-xs font-mono">
-              <div className="flex items-center gap-2 text-slate-300">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span><strong className="text-white font-bold">{totalOnline}</strong> Live Players Online</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-300">
-                <Trophy size={14} className="text-amber-400" />
-                <span>5 Competitive Disciplines</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-300">
-                <ShieldCheck size={14} className="text-blue-400" />
-                <span>Certified ELO Skill Rating</span>
-              </div>
-              <div className="flex items-center gap-2 text-slate-300">
-                <Clock size={14} className="text-emerald-400" />
-                <span>Sub-15ms Latency</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Side: Competitor Standing / Quick Stats Profile Card */}
-          <div className="w-full lg:w-auto min-w-[270px] sm:min-w-[300px] p-4 rounded-xl bg-slate-800/90 border border-slate-700/80 shadow-lg flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-400">
-                ARENA STANDING
-              </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                {tier.name}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black font-heading text-sm shadow-sm">
-                {profile?.hasCustomName && profile?.name ? profile.name[0].toUpperCase() : 'G'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-bold text-white truncate">
-                  {profile?.hasCustomName ? profile.name : 'Guest Competitor'}
-                </div>
-                <div className="text-xs text-slate-400 font-mono flex items-center gap-2 mt-0.5">
-                  <span><strong className="text-white font-bold">{profile?.rating || 1200}</strong> ELO</span>
-                  <span>•</span>
-                  <span>{totalMatches} Matches</span>
-                </div>
-              </div>
-            </div>
-
-            {/* XP Progress Bar */}
-            <div className="flex flex-col gap-1 pt-1 border-t border-slate-700/60 text-[10px] font-mono text-slate-400">
-              <div className="flex justify-between items-center">
-                <span>XP Level {profile?.level || 1}</span>
-                <span className="text-slate-300">{xpProgress}%</span>
-              </div>
-              <div className="w-full h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full transition-all duration-300" style={{ width: `${xpProgress}%` }} />
-              </div>
-            </div>
-
-            {/* Quick Action Navigation */}
-            <div className="grid grid-cols-2 gap-2 pt-0.5">
-              <button
-                onClick={onOpenProfile}
-                className="py-1.5 px-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-bold transition-colors text-center cursor-pointer"
-              >
-                Profile Stats
-              </button>
-              <button
-                onClick={onOpenLeaderboard}
-                className="py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold transition-colors text-center cursor-pointer"
-              >
-                Leaderboard
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-
-
-      {/* 2. FIVE DISTINCT GAME CARDS GRID */}
+      {/* ARENA GAME CARDS GRID */}
       <div>
         <div className="flex items-center justify-between mb-3 px-1">
           <div className="flex items-center gap-2">
             <Compass size={16} className="text-blue-600" />
+
             <h2 className="text-sm font-extrabold text-slate-900 font-heading uppercase tracking-wider m-0">Arena Game Disciplines</h2>
           </div>
           <span className="text-xs text-slate-500 font-mono font-bold">Select a game to battle</span>
         </div>
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {GAMES.map((game) => {
@@ -426,9 +332,10 @@ export default function ArcadeHomeScreen({
                     className="w-full flex items-center justify-between text-[11px] font-bold text-slate-500 hover:text-blue-600 transition-colors py-0.5 cursor-pointer bg-transparent border-none"
                   >
                     <span className="flex items-center gap-1">
-                      <Sparkles size={11} className="text-amber-500" />
+                      <Zap size={11} className="text-amber-500" />
                       <span>Winning Tactic & Rules</span>
                     </span>
+
                     {isTipOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </button>
 
@@ -485,12 +392,13 @@ export default function ArcadeHomeScreen({
                     </button>
 
                     <button
-                      onClick={() => onSelectGame('ludo', 'LOCAL_PASS_PLAY')}
+                      onClick={() => onSelectGame('ludo', 'LOCAL_4P')}
                       className="py-2 px-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center justify-center gap-1.5 border border-slate-200 cursor-pointer transition-colors"
                     >
                       <Dices size={13} />
                       <span>2–4P Pass & Play</span>
                     </button>
+
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 gap-1.5 pt-1">
@@ -536,59 +444,180 @@ export default function ArcadeHomeScreen({
         </div>
       </div>
 
-      {/* 3. PLATFORM VALUE PILLARS ("Why Players Choose games4u") */}
-      <div className="mt-4 p-6 sm:p-8 rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div className="text-center max-w-xl mx-auto mb-6">
-          <span className="text-xs font-mono font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
-            Engineered For Performance
+      {/* 2. QUICK START: 3-STEP PIPELINE */}
+      <div className="p-6 sm:p-7 rounded-2xl bg-white border border-slate-200/90 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-mono font-black uppercase tracking-wider mb-1">
+              <Zap size={12} />
+              <span>Quick Start</span>
+            </div>
+            <h2 className="text-lg font-black text-slate-900 font-heading m-0 tracking-tight">
+              How to Play in 3 Simple Steps
+            </h2>
+          </div>
+          <span className="text-xs text-slate-500 font-medium">
+            Zero app store downloads • Instant multiplayer in your browser
           </span>
-          <h2 className="text-xl sm:text-2xl font-black text-slate-900 font-heading mt-2 m-0">
-            Why Competitive Players Choose games4u Arena
-          </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-              <Zap size={16} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-black text-xs font-mono shadow-sm">
+                01
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-blue-100/70 text-blue-700">
+                SELECT BOARD
+              </span>
             </div>
-            <h3 className="text-xs font-bold text-slate-900 m-0">Sub-15ms Realtime</h3>
-            <p className="text-[11px] text-slate-500 m-0 leading-relaxed">
-              Instant WebSockets and Supabase Realtime ensure lightning-fast moves with zero latency.
+            <h3 className="text-sm font-bold text-slate-900 font-heading m-0">Pick Your Game</h3>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+              Choose from 5 classic strategy titles: Connect 4, Tic-Tac-Toe, Gomoku (15×15), Memory Match, or Ludo Championship.
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
-              <Trophy size={16} />
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-xs font-mono shadow-sm">
+                02
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-indigo-100/70 text-indigo-700">
+                CHOOSE MODE
+              </span>
             </div>
-            <h3 className="text-xs font-bold text-slate-900 m-0">ELO Skill Ranking</h3>
-            <p className="text-[11px] text-slate-500 m-0 leading-relaxed">
-              Ascend from Bronze to Grandmaster with certified competitive match rating tracking.
+            <h3 className="text-sm font-bold text-slate-900 font-heading m-0">AI, Local, or Room</h3>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+              Practice solo vs Smart AI Bots, play 2-Player Pass &amp; Play on one screen, or create a 6-letter room code to invite a friend.
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">
-              <Globe size={16} />
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs font-mono shadow-sm">
+                03
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-100/70 text-emerald-700">
+                LIVE ARENA
+              </span>
             </div>
-            <h3 className="text-xs font-bold text-slate-900 m-0">Cross-Platform Web</h3>
-            <p className="text-[11px] text-slate-500 m-0 leading-relaxed">
-              Instant play on Mobile, Tablet, and Desktop browsers with zero installs or ads.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center font-bold">
-              <ShieldCheck size={16} />
-            </div>
-            <h3 className="text-xs font-bold text-slate-900 m-0">Anti-Cheat Engine</h3>
-            <p className="text-[11px] text-slate-500 m-0 leading-relaxed">
-              Server-verified move legality and heuristic win-rate tracking ensure 100% fair play.
+            <h3 className="text-sm font-bold text-slate-900 font-heading m-0">Battle &amp; Climb Ranks</h3>
+            <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+              Make moves with real-time sync, send live emoji reactions, and win matches to earn certified ELO points for the Top 50 ladder.
             </p>
           </div>
         </div>
       </div>
+
+      {/* 3. PLATFORM VALUE & COGNITIVE BENEFITS (2-COLUMN BENTO GRID) */}
+      <div className="p-6 sm:p-7 rounded-2xl bg-white border border-slate-200/90 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-mono font-black uppercase tracking-wider mb-1">
+              <Sparkles size={12} />
+              <span>Platform Advantage</span>
+            </div>
+            <h2 className="text-lg font-black text-slate-900 font-heading m-0 tracking-tight">
+              Why Play on games4u?
+            </h2>
+          </div>
+          <span className="text-xs text-slate-500 font-medium">
+            Accessible anywhere • Meaningful brain training • Zero app installs
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Column 1: Global Accessibility & Multiplayer */}
+          <div className="p-5 rounded-xl bg-slate-50/80 border border-slate-200/80 flex flex-col gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+                <Globe size={16} />
+              </div>
+              <h3 className="text-sm font-extrabold text-slate-900 font-heading m-0">
+                Universal &amp; Global Access
+              </h3>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 m-0">Zero App Installs &amp; Cross-Platform</h4>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+                    Runs smoothly in any web browser on iPhone, Android, tablets, and computers in under 2 seconds. No phone storage taken.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 m-0">Instant 6-Letter Private Room Invites</h4>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+                    Share a room code over WhatsApp, Discord, or SMS to play instantly with friends, family, or colleagues across town or overseas.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 m-0">All Ages &amp; Family Friendly</h4>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+                    From kids to grandparents—clean board designs, no aggressive ads, and comfortable pass &amp; play options for home game nights.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Cognitive Growth & Brain Training */}
+          <div className="p-5 rounded-xl bg-slate-50/80 border border-slate-200/80 flex flex-col gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                <Brain size={16} />
+              </div>
+              <h3 className="text-sm font-extrabold text-slate-900 font-heading m-0">
+                Cognitive Growth &amp; Strategy
+              </h3>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-purple-500 mt-1.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 m-0">Strategic Foresight &amp; Trap Detection</h4>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+                    Gomoku and Connect 4 exercise spatial reasoning by training you to calculate 3–4 moves ahead and spot defensive forks early.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 m-0">Memory &amp; Visual Recall Stimulation</h4>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+                    Memory Match challenges your active working memory, pattern recognition, and recall speed through progressive difficulty tiers.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-cyan-500 mt-1.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 m-0">Certified ELO Ladder &amp; Fair Play</h4>
+                  <p className="text-xs text-slate-600 m-0 leading-relaxed font-medium">
+                    Climb verified competitive ELO tiers (Bronze to Grandmaster) backed by server-authoritative move validation and anti-cheat checks.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
 
     </div>
   );

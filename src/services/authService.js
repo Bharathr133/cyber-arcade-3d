@@ -84,9 +84,10 @@ class AuthService {
           success: false,
           alreadyRegistered: true,
           suggestGoogle: true,
-          error: 'An account with this email was created using Google Sign-In. Please click "Continue with Google" above to log in.'
+          error: 'An account with this email was created using Google Sign-In. Please click the "Continue with Google" button below to log in.'
         };
       }
+
 
       // If Supabase has email confirmation enabled, session will be null until verified
       if (data?.user && !data.session) {
@@ -346,12 +347,13 @@ class AuthService {
           saveUserProfile(verifiedProfile);
           // Ensure DB has the latest snapshot
           await cloudSync.syncProfileToCloud(verifiedProfile);
-          callback(verifiedProfile);
+          callback(verifiedProfile, event);
         } else if (event === 'SIGNED_OUT' && callback) {
           const guestProfile = getUserProfile();
-          callback(guestProfile);
+          callback(guestProfile, event);
         }
       });
+
 
       return () => {
         if (subscription?.unsubscribe) subscription.unsubscribe();

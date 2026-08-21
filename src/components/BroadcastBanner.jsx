@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sparkles, AlertTriangle, AlertCircle, Info } from 'lucide-react';
+import { X, Zap, AlertTriangle, AlertCircle, Info } from 'lucide-react';
 import { adminService } from '../services/adminService.js';
+
 import { getSupabase } from '../utils/supabaseClient.js';
 
 export default function BroadcastBanner({ isInsideGame = false, isInsideAdmin = false }) {
@@ -91,8 +92,9 @@ export default function BroadcastBanner({ isInsideGame = false, isInsideAdmin = 
     event: {
       bg: 'bg-purple-700 text-white border-purple-800 shadow-md',
       badge: 'bg-purple-900/60 text-purple-100 border-purple-400/40',
-      icon: Sparkles
+      icon: Zap
     },
+
     warning: {
       bg: 'bg-amber-600 text-white border-amber-700 shadow-md',
       badge: 'bg-amber-800/60 text-amber-100 border-amber-300/40',

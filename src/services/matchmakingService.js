@@ -5,9 +5,10 @@ import { fetchFromApi } from './apiClient.js';
 class MatchmakingService {
   getEffectiveUser(userId, name, avatarId) {
     const local = getUserProfile();
+    const resolvedName = name || local?.display_name || local?.name || local?.username || (local?.email ? local.email.split('@')[0] : 'Player');
     return {
       userId: userId || local?.id || 'player_' + Math.random().toString(36).substring(2, 10),
-      name: name || local?.name || 'Player',
+      name: resolvedName,
       avatarId: avatarId || local?.avatarId || '1'
     };
   }
@@ -83,6 +84,26 @@ class MatchmakingService {
           })
           .eq('id', room.id);
 
+        // Resolve real host name & avatar from profiles if needed
+        let opponentName = room.player_1_name;
+        let opponentAvatar = room.avatar_id || room.player_1_avatar || '1';
+        let opponentRating = 1200;
+
+        if (!opponentName || opponentName === 'Player 1' || opponentName === 'Player') {
+          try {
+            const { data: hostProf } = await supabase
+              .from('profiles')
+              .select('name, display_name, username, avatar_id, rating')
+              .eq('id', room.host_id)
+              .single();
+            if (hostProf) {
+              opponentName = hostProf.display_name || hostProf.name || hostProf.username || opponentName;
+              if (hostProf.avatar_id) opponentAvatar = hostProf.avatar_id;
+              if (hostProf.rating) opponentRating = hostProf.rating;
+            }
+          } catch (e) {}
+        }
+
         // Create match record
         const { data: matchData } = await supabase
           .from('matches')
@@ -90,7 +111,7 @@ class MatchmakingService {
             game_slug: cleanGameSlug,
             room_id: room.id,
             player_1_id: room.host_id,
-            player_1_name: room.player_1_name || 'Host',
+            player_1_name: opponentName || 'Player 1',
             player_2_id: user.userId,
             player_2_name: user.name,
             result: 'ACTIVE'
@@ -120,13 +141,13 @@ class MatchmakingService {
           room_id: room.id,
           role: 'O',
           opponent: {
-            name: room.player_1_name || 'Host Player',
-            avatarId: '1',
-            rating: 1200
+            name: opponentName || 'Challenger',
+            avatarId: opponentAvatar,
+            rating: opponentRating
           }
         };
-
       }
+
 
       // No waiting room found -> Create a new public waiting room
       const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -271,6 +292,26 @@ class MatchmakingService {
         })
         .eq('id', room.id);
 
+      // Resolve real host name & avatar from profiles if needed
+      let opponentName = room.player_1_name;
+      let opponentAvatar = room.avatar_id || room.player_1_avatar || '1';
+      let opponentRating = 1200;
+
+      if (!opponentName || opponentName === 'Player 1' || opponentName === 'Player') {
+        try {
+          const { data: hostProf } = await supabase
+            .from('profiles')
+            .select('name, display_name, username, avatar_id, rating')
+            .eq('id', room.host_id)
+            .single();
+          if (hostProf) {
+            opponentName = hostProf.display_name || hostProf.name || hostProf.username || opponentName;
+            if (hostProf.avatar_id) opponentAvatar = hostProf.avatar_id;
+            if (hostProf.rating) opponentRating = hostProf.rating;
+          }
+        } catch (e) {}
+      }
+
       // Create Match Record
       const { data: matchData } = await supabase
         .from('matches')
@@ -278,7 +319,7 @@ class MatchmakingService {
           game_slug: room.game_slug,
           room_id: room.id,
           player_1_id: room.host_id,
-          player_1_name: room.player_1_name || 'Host',
+          player_1_name: opponentName || 'Player 1',
           player_2_id: user.userId,
           player_2_name: user.name,
           result: 'ACTIVE'
@@ -308,14 +349,17 @@ class MatchmakingService {
         room_id: room.id,
         role: 'O',
         opponent: {
-          name: room.player_1_name || 'Host Player',
-          avatarId: '1',
-          rating: 1200
+          name: opponentName || 'Challenger',
+          avatarId: opponentAvatar,
+          rating: opponentRating
         }
       };
+
     } catch (err) {
-      return { success: false, error: err?.message || 'JOIN_ROOM_FAILED' };
+      console.error('[Join Room Error]:', err);
+      return { success: false, error: 'Unable to connect to room. Please check the code and try again.' };
     }
+
   }
 
   // 4. Cancel Queue Ticket

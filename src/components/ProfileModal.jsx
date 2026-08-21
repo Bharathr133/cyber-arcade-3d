@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  User, Sparkles, Check, X, LogOut, KeyRound, ShieldCheck, Trophy, Lock, 
+  User, Check, X, LogOut, KeyRound, ShieldCheck, Trophy, Lock, 
   ArrowRight, UserCheck, AlertCircle, RefreshCw, UserPlus, LogIn, ChevronLeft,
   Mail, Download, Shield, Eye, EyeOff, Globe, Award, Flame, Zap, Dices, Layers, Grid
 } from 'lucide-react';
+
 import { AVATARS, saveUserProfile, getTier } from '../utils/userProfile.js';
 import { authService } from '../services/authService.js';
 import { validateEmail, evaluatePasswordStrength, validateGamerTag, validateDisplayName } from '../utils/validation.js';

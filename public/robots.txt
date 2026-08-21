@@ -1,12 +1,37 @@
-# Online Free Games - Search Engine Robots Configuration
+# games4u - Search Engine Robots Configuration
 User-agent: *
 Allow: /
-Allow: /?game=gomoku
-Allow: /?game=connect4
-Allow: /?game=tictactoe
-Allow: /?game=memory
-Allow: /?game=ludo
+Allow: /favicon.ico
+Allow: /favicon.png
+Allow: /favicon-48x48.png
+Allow: /favicon-96x96.png
+Allow: /favicon-192x192.png
+Allow: /favicon-512x512.png
+Allow: /apple-touch-icon.png
+Allow: /brand-logo.jpg
+Allow: /brand-logo.png
+Allow: /connect4
+Allow: /tictactoe
+Allow: /gomoku
+Allow: /memory
+Allow: /ludo
+Allow: /rules
+Allow: /leaderboard
+Allow: /about
+Allow: /contact
+Allow: /fair-play
+Allow: /privacy
+
+# Explicit Googlebot-Image crawler permissions for Search Favicon indexing
+User-agent: Googlebot-Image
+Allow: /favicon.ico
+Allow: /favicon.png
+Allow: /favicon-48x48.png
+Allow: /favicon-96x96.png
+Allow: /favicon-192x192.png
+Allow: /apple-touch-icon.png
+Allow: /brand-logo.jpg
+Allow: /brand-logo.png
 
 # Sitemaps
 Sitemap: https://onlinefreegames.vercel.app/sitemap.xml
-

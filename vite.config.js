@@ -32,8 +32,12 @@ function apiServerMiddlewarePlugin() {
             } else if (pathname === '/api/matchmaking') {
               const mod = await import('./api/matchmaking.js');
               handler = mod.default;
+            } else if (pathname === '/api/feedback') {
+              const mod = await import('./api/feedback.js');
+              handler = mod.default;
             }
           } catch (e) {
+
             console.error('API middleware resolution error:', e);
           }
 

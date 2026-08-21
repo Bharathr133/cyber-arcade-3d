@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ArrowLeft, Mail, Lock, User, Check, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles, Send, Inbox, ShieldCheck, ExternalLink
+  ArrowLeft, Mail, Lock, User, Check, AlertCircle, RefreshCw, Eye, EyeOff, Send, Inbox, ShieldCheck, ExternalLink
 } from 'lucide-react';
+
 import { authService } from '../services/authService.js';
 import { soundSynth } from '../utils/soundSynth.js';
 import { evaluatePasswordStrength, validateEmail } from '../utils/validation.js';
@@ -183,7 +184,32 @@ export default function AuthPage({
         } else {
           setErrorMessage(res.error || 'Failed to send reset link.');
         }
+      } else if (mode === 'reset') {
+        if (passwordInput !== confirmPasswordInput) {
+          setLoading(false);
+          setErrorMessage('Passwords do not match. Please verify your confirmation password.');
+          return;
+        }
+        if (passwordInput.length < 6) {
+          setLoading(false);
+          setErrorMessage('Password must be at least 6 characters.');
+          return;
+        }
+        const res = await authService.updatePassword(passwordInput);
+        setLoading(false);
+        if (res.success) {
+          soundSynth.playVictory();
+          setSuccessMessage('Password updated successfully! You can now sign in using either Google or your new password.');
+          setTimeout(() => {
+            setMode('login');
+            setPasswordInput('');
+            setConfirmPasswordInput('');
+          }, 2000);
+        } else {
+          setErrorMessage(res.error || 'Failed to update password.');
+        }
       }
+
     } catch (err) {
       setLoading(false);
       setErrorMessage(err?.message || 'An unexpected error occurred.');
@@ -194,13 +220,14 @@ export default function AuthPage({
   return (
     <div style={{
       width: '100%',
-      minHeight: '80vh',
+      minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: '24px 16px',
       boxSizing: 'border-box'
     }}>
+
       <div 
         className="card-enterprise animate-pop-in"
         style={{
@@ -245,7 +272,7 @@ export default function AuthPage({
         </div>
 
         {/* 1. TOP SEGMENTED TABS (Sign In / Create Account) */}
-        {mode !== 'verify' && mode !== 'forgot' && (
+        {mode !== 'verify' && mode !== 'forgot' && mode !== 'reset' && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
@@ -254,6 +281,7 @@ export default function AuthPage({
             borderRadius: '14px',
             gap: '4px'
           }}>
+
             <button
               type="button"
               onClick={() => setMode('login')}
@@ -436,6 +464,7 @@ export default function AuthPage({
                 {mode === 'login' && 'Welcome Back'}
                 {mode === 'signup' && 'Create Player Profile'}
                 {mode === 'forgot' && 'Reset Password'}
+                {mode === 'reset' && 'Set New Password'}
               </h1>
               <p style={{
                 fontFamily: 'var(--font-body)',
@@ -446,7 +475,9 @@ export default function AuthPage({
                 {mode === 'login' && 'Sign in to access your ratings, ranks, and match records.'}
                 {mode === 'signup' && 'Play with a certified ELO rating and save stats across devices.'}
                 {mode === 'forgot' && "Enter your email and we'll send a recovery link."}
+                {mode === 'reset' && 'Create a password for your account to enable email and password sign-in.'}
               </p>
+
             </div>
 
             {/* Alerts */}
@@ -468,40 +499,10 @@ export default function AuthPage({
                   <span>{errorMessage}</span>
                 </div>
 
-                {suggestGoogle && (
-                  <button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    disabled={googleLoading}
-                    style={{
-                      background: 'linear-gradient(135deg, #0F172A, #1E293B)',
-                      color: '#FFFFFF',
-                      border: '1px solid #334155',
-                      padding: '8px 14px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      alignSelf: 'flex-start',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                    </svg>
-                    <span>Sign In with Google Instead</span>
-                  </button>
-                )}
-
                 {pendingVerificationEmail && (
                   <button
                     type="button"
+
                     onClick={() => handleResendVerification(pendingVerificationEmail)}
                     disabled={resendLoading || resendCooldown > 0}
                     style={{
@@ -542,7 +543,7 @@ export default function AuthPage({
             )}
 
             {/* 3. 1-Click Google OAuth Button */}
-            {mode !== 'forgot' && (
+            {mode !== 'forgot' && mode !== 'reset' && (
               <>
                 <button
                   type="button"
@@ -617,38 +618,40 @@ export default function AuthPage({
                 </div>
               )}
 
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#475569', marginBottom: '4px', fontFamily: 'var(--font-mono)' }}>
-                  REAL EMAIL ADDRESS
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <Mail size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input
-                    type="email"
-                    required
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="name@example.com"
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px 10px 38px',
-                      borderRadius: '10px',
-                      border: '1.5px solid #E2E8F0',
-                      background: '#FAFAFA',
-                      fontSize: '13px',
-                      color: '#0F172A',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                  />
+              {mode !== 'reset' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#475569', marginBottom: '4px', fontFamily: 'var(--font-mono)' }}>
+                    REAL EMAIL ADDRESS
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="email"
+                      required
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="name@example.com"
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px 10px 38px',
+                        borderRadius: '10px',
+                        border: '1.5px solid #E2E8F0',
+                        background: '#FAFAFA',
+                        fontSize: '13px',
+                        color: '#0F172A',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {mode !== 'forgot' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                     <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569', fontFamily: 'var(--font-mono)' }}>
-                      PASSWORD
+                      {mode === 'reset' ? 'NEW PASSWORD' : 'PASSWORD'}
                     </label>
                     {mode === 'login' && (
                       <button
@@ -675,7 +678,7 @@ export default function AuthPage({
                       required
                       value={passwordInput}
                       onChange={(e) => setPasswordInput(e.target.value)}
-                      placeholder="Min. 6 characters"
+                      placeholder={mode === 'reset' ? 'Create new password (min. 6 chars)' : 'Min. 6 characters'}
                       minLength={6}
                       style={{
                         width: '100%',
@@ -711,11 +714,11 @@ export default function AuthPage({
                 </div>
               )}
 
-              {/* Confirm Password Field for Sign Up */}
-              {mode === 'signup' && (
+              {/* Confirm Password Field for Sign Up and Reset Password */}
+              {(mode === 'signup' || mode === 'reset') && (
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#475569', marginBottom: '4px', fontFamily: 'var(--font-mono)' }}>
-                    CONFIRM PASSWORD
+                    {mode === 'reset' ? 'CONFIRM NEW PASSWORD' : 'CONFIRM PASSWORD'}
                   </label>
                   <div style={{ position: 'relative' }}>
                     <Lock size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -724,7 +727,7 @@ export default function AuthPage({
                       required
                       value={confirmPasswordInput}
                       onChange={(e) => setConfirmPasswordInput(e.target.value)}
-                      placeholder="Re-enter password"
+                      placeholder={mode === 'reset' ? 'Confirm your new password' : 'Re-enter password'}
                       minLength={6}
                       style={{
                         width: '100%',
@@ -767,7 +770,7 @@ export default function AuthPage({
 
               <button
                 type="submit"
-                disabled={loading || (mode === 'signup' && confirmPasswordInput && !passwordsMatch)}
+                disabled={loading || ((mode === 'signup' || mode === 'reset') && confirmPasswordInput && !passwordsMatch)}
                 className="btn-primary"
                 style={{
                   width: '100%',
@@ -785,14 +788,16 @@ export default function AuthPage({
                   'Sign In'
                 ) : mode === 'signup' ? (
                   'Create & Verify Account'
-                ) : (
+                ) : mode === 'forgot' ? (
                   'Send Reset Link'
+                ) : (
+                  'Save New Password'
                 )}
               </button>
             </form>
 
-            {/* Forgot Mode Switch Back */}
-            {mode === 'forgot' && (
+            {/* Forgot / Reset Mode Switch Back */}
+            {(mode === 'forgot' || mode === 'reset') && (
               <div style={{ textAlign: 'center', fontSize: '12px', color: '#64748B', paddingTop: '4px' }}>
                 <button
                   type="button"
@@ -810,6 +815,7 @@ export default function AuthPage({
                 </button>
               </div>
             )}
+
           </>
         )}
       </div>

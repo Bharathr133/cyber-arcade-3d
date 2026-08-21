@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   RotateCcw, User, Bot, Wifi, Lightbulb, Undo2, 
-  MessageSquare, Award, Sparkles, ChevronDown, Zap, X
+  MessageSquare, Award, ChevronDown, Zap, X
 } from 'lucide-react';
+
 import { soundSynth } from '../utils/soundSynth.js';
 
 
@@ -181,12 +182,14 @@ export default function ConnectFour({
   profile, 
   initialMode = 'VS_COMPUTER', 
   onlineSession = null, 
+  localPlayerNames = null,
   settings, 
   onMatchFinished, 
   onGoHome 
 }) {
   const isOnline = initialMode === 'ONLINE_MATCH' && !!onlineSession?.matchId;
   const turnTimeLimit = settings?.turnTimeLimit !== undefined ? settings.turnTimeLimit : 30;
+
 
   const [initialState] = useState(() => isOnline ? DEFAULT_C4_STATE : loadGameState('connect4', DEFAULT_C4_STATE));
 
@@ -356,9 +359,59 @@ export default function ConnectFour({
     if (!isOnline || !onlineSession?.matchId) return;
 
     setMyRole(onlineSession.myRole === 'O' ? YELLOW : RED);
-    if (onlineSession.opponent) setOpponentProfile(onlineSession.opponent);
+    if (onlineSession.opponent) {
+      setOpponentProfile(onlineSession.opponent);
+    }
 
     const matchId = onlineSession.matchId;
+
+    // Real-time Supabase Match & Opponent Profile Resolution
+    const resolveRealOpponent = async () => {
+      try {
+        const supabase = getSupabase();
+        if (!supabase) return;
+
+        const { data: match } = await supabase
+          .from('matches')
+          .select('player_1_id, player_1_name, player_2_id, player_2_name')
+          .eq('id', matchId)
+          .single();
+
+        if (match) {
+          const isPlayer1 = match.player_1_id === profile?.id;
+          const oppName = isPlayer1 ? match.player_2_name : match.player_1_name;
+          const oppId = isPlayer1 ? match.player_2_id : match.player_1_id;
+
+          if (oppName && oppName !== 'Opponent' && oppName !== 'Player 1' && oppName !== 'Player 2') {
+            setOpponentProfile(prev => ({ ...prev, name: oppName, id: oppId }));
+          }
+
+          if (oppId) {
+            const { data: oppProf } = await supabase
+              .from('profiles')
+              .select('name, display_name, username, avatar_id, rating')
+              .eq('id', oppId)
+              .single();
+
+            if (oppProf) {
+              const finalName = oppProf.display_name || oppProf.name || (oppProf.username ? `@${oppProf.username}` : null);
+              if (finalName) {
+                setOpponentProfile(prev => ({
+                  ...prev,
+                  name: finalName,
+                  avatarId: oppProf.avatar_id || prev.avatarId,
+                  rating: oppProf.rating || prev.rating,
+                  id: oppId
+                }));
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    };
+
+    resolveRealOpponent();
+
 
     realtimeManager.subscribeToMatch(matchId, profile?.id, {
       onReactionEmoji: (reactionData) => {
@@ -912,12 +965,8 @@ export default function ConnectFour({
         if (myTurnNow) {
           if (remainingSec <= 0) {
             clearInterval(timer);
-            const validCols = [3, 2, 4, 1, 5, 0, 6].filter(c => boardRef.current[0][c] === EMPTY);
-            if (validCols.length > 0) {
-              handleDropToken(validCols[0]);
-            } else {
-              handleFinalizeMatch('LOSS', 'Turn time expired');
-            }
+            // Official Competitive Rule: Timeout = Forfeit Loss (NO automatic moves)
+            handleFinalizeMatch('LOSS', 'Time expired (Timeout forfeit)');
           }
         } else {
           // Opponent's turn: 4-second grace buffer to prevent false timeout claims from latency
@@ -931,13 +980,14 @@ export default function ConnectFour({
           clearInterval(timer);
           if (gameMode === 'VS_COMPUTER') {
             if (currentPlayer === RED) {
-              handleFinalizeMatch('LOSS', 'Turn time expired');
+              handleFinalizeMatch('LOSS', 'Time expired');
             }
           } else if (gameMode === 'LOCAL_2P') {
             setWinner(currentPlayer === RED ? YELLOW : RED);
           }
         }
       }
+
 
       if (remainingSec <= 5 && remainingSec > 0) {
         try { soundSynth.playRotate(); } catch (e) {}
@@ -1205,13 +1255,13 @@ export default function ConnectFour({
       {/* Dual Player Bar & Series Tracker */}
       <div style={{ width: '100%', position: 'relative' }}>
         <MatchPlayerBar
-          p1Name={profile?.name || 'You'}
+          p1Name={isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)}
           p1AvatarId={profile?.avatarId || '1'}
           p1Rating={profile?.rating || 1200}
           p1Score={scores.red}
           p1Symbol="RED DISC"
           p1Color="#ef4444"
-          p2Name={isOnline ? (opponentProfile?.name || 'Opponent') : (gameMode === 'VS_COMPUTER' ? (aiDifficulty === 'HARD' ? 'Grandmaster AI' : aiDifficulty === 'MEDIUM' ? 'Smart AI' : 'Casual AI') : 'Player 2')}
+          p2Name={isOnline ? opponentProfile?.name : (gameMode === 'VS_COMPUTER' ? (aiDifficulty === 'HARD' ? 'Grandmaster AI' : aiDifficulty === 'MEDIUM' ? 'Smart AI' : 'Casual AI') : (localPlayerNames?.p2 || 'Opponent'))}
           p2AvatarId={isOnline ? (opponentProfile?.avatarId || '2') : '2'}
           p2Rating={isOnline ? (opponentProfile?.rating || 1200) : (aiDifficulty === 'HARD' ? 1750 : aiDifficulty === 'MEDIUM' ? 1400 : 1100)}
           p2Score={scores.yellow}
@@ -1221,12 +1271,15 @@ export default function ConnectFour({
           isGameOver={!!winner}
           gameMode={gameMode}
           winnerText={
-            winner === RED ? (gameMode === 'VS_COMPUTER' ? 'YOU WIN' : 'RED WINS') :
-            winner === YELLOW ? (gameMode === 'VS_COMPUTER' ? 'AI WINS' : 'YELLOW WINS') :
-            winner === 'DRAW' ? 'DRAW' : null
+            winner === RED ? `${isOnline ? profile?.name : (gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name)} Won!` :
+            winner === YELLOW ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${isOnline ? opponentProfile?.name : (localPlayerNames?.p2 || 'Opponent')} Won!`) :
+            winner === 'DRAW' ? 'Draw Match!' : null
           }
           timeLeft={timeLeft}
         />
+
+
+
 
         {/* Series Best-of-3 Round Indicator */}
         <div style={{

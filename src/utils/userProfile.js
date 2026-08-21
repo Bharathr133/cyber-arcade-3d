@@ -171,7 +171,7 @@ export function saveUserProfile(updated) {
       authProvider: updated.authProvider || (updated.email ? 'email' : 'guest'),
       gameStats,
       history: Array.isArray(updated.history) ? updated.history.slice(0, 20) : [],
-      isRegistered: true
+      isRegistered: updated.isGuest === false && !!updated.email
     };
 
 
@@ -193,7 +193,24 @@ export function logoutUserProfile() {
   }
 }
 
-export function recordMatchResult(gameKey, outcome, opponentName = 'Computer') {
+// Mathematical Elo Rating Calculator: R_new = R_old + K * (S - E)
+export function calculateEloDelta(playerRating, opponentRating = 1200, outcome = 'WIN', kFactor = 32) {
+  const pRating = Math.max(100, Number(playerRating) || 1200);
+  const oppRating = Math.max(100, Number(opponentRating) || 1200);
+  const expectedScore = 1 / (1 + Math.pow(10, (oppRating - pRating) / 400));
+  const actualScore = outcome === 'WIN' ? 1 : outcome === 'LOSS' ? 0 : 0.5;
+  const rawDelta = Math.round(kFactor * (actualScore - expectedScore));
+
+  if (outcome === 'WIN') {
+    return Math.max(14, Math.min(38, rawDelta));
+  } else if (outcome === 'LOSS') {
+    return Math.min(-8, Math.max(-28, rawDelta));
+  } else {
+    return Math.max(-5, Math.min(5, rawDelta));
+  }
+}
+
+export function recordMatchResult(gameKey, outcome, opponentName = 'Computer', opponentRating = 1200) {
   const normalizedKey = gameKey.toLowerCase().includes('gomoku') ? 'gomoku' :
                         gameKey.toLowerCase().includes('connect') ? 'connect4' :
                         gameKey.toLowerCase().includes('memory') ? 'memory' :
@@ -221,26 +238,24 @@ export function recordMatchResult(gameKey, outcome, opponentName = 'Computer') {
     isRegistered: false
   };
 
-
-  let ratingDelta = 0;
-  let xpGain = 10;
+  const currentRating = profile.gameStats[normalizedKey]?.rating || profile.rating || 1200;
+  const ratingDelta = calculateEloDelta(currentRating, opponentRating, outcome);
+  let xpGain = 15;
 
   if (outcome === 'WIN') {
-    ratingDelta = 25;
     xpGain = 50;
     profile.wins = (profile.wins || 0) + 1;
     profile.gameStats[normalizedKey].wins = (profile.gameStats[normalizedKey].wins || 0) + 1;
   } else if (outcome === 'LOSS') {
-    ratingDelta = -10;
     xpGain = 10;
     profile.losses = (profile.losses || 0) + 1;
     profile.gameStats[normalizedKey].losses = (profile.gameStats[normalizedKey].losses || 0) + 1;
   } else {
-    ratingDelta = 2;
-    xpGain = 15;
+    xpGain = 20;
     profile.draws = (profile.draws || 0) + 1;
     profile.gameStats[normalizedKey].draws = (profile.gameStats[normalizedKey].draws || 0) + 1;
   }
+
 
   // Dynamic Real Daily Streak Calculation
   const todayStr = new Date().toISOString().split('T')[0];

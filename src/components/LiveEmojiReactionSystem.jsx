@@ -164,75 +164,92 @@ export default function LiveEmojiReactionSystem({
 
 
   return (
-    <div style={{ width: '100%', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* 1. NON-INTRUSIVE FLOATING EMOJI REACTIONS (At the Sides, NOT blocking board) */}
+    <div style={{ width: '100%', maxWidth: '440px', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* 1. MEANINGFUL ANCHORED EMOJI REACTIONS (Directly above the game dock near players) */}
       {activeReactions.map((item) => (
         <div
           key={item.id}
           style={{
-            position: 'fixed',
-            bottom: item.isSelf ? '110px' : 'auto',
-            top: item.isSelf ? 'auto' : '90px',
-            right: '24px',
+            position: 'absolute',
+            bottom: item.isSelf ? '56px' : 'auto',
+            top: item.isSelf ? 'auto' : '-55px',
+            left: item.isSelf ? '75%' : '25%',
+            transform: 'translateX(-50%)',
             pointerEvents: 'none',
             zIndex: 9999,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '4px'
+            gap: '4px',
+            animation: 'fadeIn 0.15s ease-out'
           }}
         >
-          {/* Realistic Emoji Action Animation (Only emoji animates) */}
+          {/* Realistic Emoji Action Animation */}
           <div className={item.animClass} style={{ display: 'inline-flex', fontSize: '38px', lineHeight: 1 }}>
             {item.emoji}
           </div>
 
-          {/* Static Clean Sender Tag (No animation on text) */}
+          {/* Static Clean Sender Tag */}
           <div style={{
-            background: 'rgba(15, 23, 42, 0.85)',
+            background: 'rgba(15, 23, 42, 0.88)',
             backdropFilter: 'blur(8px)',
-            padding: '3px 8px',
+            padding: '2px 8px',
             borderRadius: '6px',
             fontSize: '10px',
             fontWeight: '800',
             color: item.isSelf ? '#38BDF8' : '#FBBF24',
             fontFamily: 'var(--font-mono)',
             border: '1px solid rgba(255, 255, 255, 0.15)',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
           }}>
             {item.sender}
           </div>
         </div>
       ))}
 
-      {/* 2. NON-INTRUSIVE STATIC SPEECH BUBBLES (Clean text, no text distortion) */}
+      {/* 2. MEANINGFUL ANCHORED SPEECH BUBBLES (Directly near player sides) */}
       {activeSpeechBubbles.map((bubble) => (
         <div
           key={bubble.id}
           className="animate-speech-bubble"
           style={{
-            position: 'fixed',
-            bottom: bubble.isSelf ? '120px' : 'auto',
-            top: bubble.isSelf ? 'auto' : '100px',
-            left: '24px',
+            position: 'absolute',
+            bottom: bubble.isSelf ? '56px' : 'auto',
+            top: bubble.isSelf ? 'auto' : '-50px',
+            left: bubble.isSelf ? '70%' : '30%',
+            transform: 'translateX(-50%)',
             pointerEvents: 'none',
             zIndex: 9999,
             background: '#FFFFFF',
-            border: '1.5px solid #E4E4E7',
-            padding: '7px 12px',
+            border: '1.5px solid #2563EB',
+            padding: '6px 12px',
             borderRadius: '12px',
-            boxShadow: '0 8px 24px -4px rgba(0,0,0,0.15)',
+            boxShadow: '0 8px 24px -4px rgba(37,99,235,0.25), 0 2px 6px rgba(0,0,0,0.08)',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px'
+            gap: '6px',
+            whiteSpace: 'nowrap'
           }}
         >
           <MessageSquare size={13} color="#2563EB" />
           <span style={{ fontSize: '12px', fontWeight: '800', color: '#18181B' }}>
             {bubble.text}
           </span>
+          <span style={{
+            fontSize: '9px',
+            fontWeight: '800',
+            fontFamily: 'var(--font-mono)',
+            padding: '1px 5px',
+            borderRadius: '4px',
+            background: bubble.isSelf ? '#EFF6FF' : '#FEF3C7',
+            color: bubble.isSelf ? '#2563EB' : '#B45309'
+          }}>
+            {bubble.sender}
+          </span>
         </div>
       ))}
+
 
       {/* 3. QUICK CHAT POPUP DRAWER (Opens smoothly above bottom dock) */}
       {chatDrawerOpen && (

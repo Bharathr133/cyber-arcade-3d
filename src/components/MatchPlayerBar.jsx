@@ -88,8 +88,9 @@ export default function MatchPlayerBar({
             fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 13px)', fontWeight: '800',
             flexShrink: 0
           }}>
-            {p1Name ? p1Name[0].toUpperCase() : 'P1'}
+            {p1Name ? p1Name[0].toUpperCase() : ''}
           </div>
+
 
           <div style={{ minWidth: 0, flex: 1, textAlign: 'left', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -244,8 +245,9 @@ export default function MatchPlayerBar({
             fontFamily: 'var(--font-heading)', fontSize: 'clamp(11px, 2.5vw, 13px)', fontWeight: '800',
             flexShrink: 0
           }}>
-            {isVsAi ? <Bot size={16} /> : (p2Name ? p2Name[0].toUpperCase() : 'P2')}
+            {isVsAi ? <Bot size={16} /> : (p2Name ? p2Name[0].toUpperCase() : '')}
           </div>
+
         </div>
       </div>
     </div>

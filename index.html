@@ -38,9 +38,14 @@
     <link rel="alternate" hreflang="x-default" href="https://onlinefreegames.vercel.app/" />
     <link rel="alternate" hreflang="en" href="https://onlinefreegames.vercel.app/" />
 
-    <!-- Favicon & Web App Icons -->
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
+    <!-- Google Search Favicon Specifications (48x48 multiples & Standard Icons) -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512x512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
 
     <!-- Open Graph / Facebook / Discord / WhatsApp / LinkedIn -->
@@ -49,22 +54,21 @@
     <meta property="og:site_name" content="games4u" />
     <meta property="og:title" content="games4u — Free 2-Player Multiplayer Strategy Board Games" />
     <meta property="og:description" content="Instant 2-player multiplayer strategy board games: Connect 4, Tic-Tac-Toe, Gomoku, Memory Match, and Ludo. Play vs smart AI or battle friends with 6-letter room codes." />
-    <meta property="og:image" content="https://onlinefreegames.vercel.app/icon.svg" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
-    <meta property="og:image:alt" content="games4u Logo" />
+    <meta property="og:image" content="https://onlinefreegames.vercel.app/brand-logo.jpg" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:image:alt" content="games4u Grandmaster Logo" />
     <meta property="og:locale" content="en_US" />
-
 
     <!-- Twitter / X Card Data -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content="https://onlinefreegames.vercel.app/" />
-    <meta name="twitter:title" content="Online Free Games — 2-Player Multiplayer Strategy Games" />
-    <meta name="twitter:description" content="Play free Gomoku, Connect 4, and Tic-Tac-Toe with instant matchmaking, private room codes, and live global rankings." />
-    <meta name="twitter:image" content="https://onlinefreegames.vercel.app/icon.svg" />
+    <meta name="twitter:title" content="games4u — 2-Player Multiplayer Strategy Board Games" />
+    <meta name="twitter:description" content="Play free Gomoku, Connect 4, Tic-Tac-Toe, Memory, and Ludo with instant matchmaking, private room codes, and live global rankings." />
+    <meta name="twitter:image" content="https://onlinefreegames.vercel.app/brand-logo.jpg" />
     <meta name="twitter:creator" content="@Bharathr133" />
 
-    <!-- Structured Data: Multi-Entity JSON-LD Graph for Google Search Rich Snippets -->
+    <!-- Structured Data: Multi-Entity JSON-LD Graph for Google Search Rich Snippets & Favicon Indexing -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -73,34 +77,38 @@
           "@type": "WebSite",
           "@id": "https://onlinefreegames.vercel.app/#website",
           "url": "https://onlinefreegames.vercel.app/",
-          "name": "Online Free Games",
-          "description": "Free instant 2-player multiplayer strategy games featuring Connect 4, Tic-Tac-Toe, and Gomoku.",
+          "name": "games4u",
+          "alternateName": "games4u Strategy Arena",
+          "description": "Free instant 2-player multiplayer strategy board games featuring Connect 4, Tic-Tac-Toe, Gomoku, Memory Match, and Ludo.",
           "inLanguage": "en",
           "publisher": {
-            "@id": "https://onlinefreegames.vercel.app/#author"
+            "@type": "Organization",
+            "name": "games4u",
+            "url": "https://onlinefreegames.vercel.app/",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://onlinefreegames.vercel.app/brand-logo.jpg",
+              "width": 1024,
+              "height": 1024
+            }
           }
         },
         {
-          "@type": "Person",
-          "@id": "https://onlinefreegames.vercel.app/#author",
-          "name": "Bharath R",
-          "url": "https://bharathr.vercel.app/",
-          "jobTitle": "Full Stack Software Engineer",
-          "sameAs": [
-            "https://bharathr.vercel.app/"
-          ]
+          "@type": "Organization",
+          "@id": "https://onlinefreegames.vercel.app/#organization",
+          "name": "games4u",
+          "url": "https://onlinefreegames.vercel.app/",
+          "logo": "https://onlinefreegames.vercel.app/brand-logo.jpg",
+          "image": "https://onlinefreegames.vercel.app/brand-logo.jpg"
         },
         {
           "@type": "WebApplication",
           "@id": "https://onlinefreegames.vercel.app/#webapp",
           "url": "https://onlinefreegames.vercel.app/",
-          "name": "Online Free Games Hub",
+          "name": "games4u Strategy Arena",
           "applicationCategory": "GameApplication",
           "operatingSystem": "All modern browsers (Chrome, Safari, Firefox, Edge, iOS, Android)",
           "browserRequirements": "Requires JavaScript. Requires HTML5 Canvas & WebSockets.",
-          "author": {
-            "@id": "https://onlinefreegames.vercel.app/#author"
-          },
           "offers": {
             "@type": "Offer",
             "price": "0",
@@ -110,7 +118,7 @@
             "Real-time 2-player multiplayer matchmaking",
             "Private 6-letter room invites",
             "Smart AI computer difficulty",
-            "Supabase cloud-synced global Grandmaster leaderboards",
+            "Live global Grandmaster leaderboards",
             "Interactive live emoji reactions",
             "Accidental match exit protection"
           ]
@@ -118,7 +126,7 @@
         {
           "@type": "VideoGame",
           "name": "Connect Four Online",
-          "url": "https://onlinefreegames.vercel.app/",
+          "url": "https://onlinefreegames.vercel.app/connect4",
           "gamePlatform": ["Web Browser", "Mobile Browser"],
           "applicationCategory": "GameApplication",
           "genre": ["Strategy", "Board Game", "Multiplayer"],
@@ -132,7 +140,7 @@
         {
           "@type": "VideoGame",
           "name": "Tic-Tac-Toe Blitz",
-          "url": "https://onlinefreegames.vercel.app/",
+          "url": "https://onlinefreegames.vercel.app/tictactoe",
           "gamePlatform": ["Web Browser", "Mobile Browser"],
           "applicationCategory": "GameApplication",
           "genre": ["Strategy", "Board Game", "Multiplayer", "Blitz"],
@@ -146,7 +154,7 @@
         {
           "@type": "VideoGame",
           "name": "Gomoku Five in a Row",
-          "url": "https://onlinefreegames.vercel.app/",
+          "url": "https://onlinefreegames.vercel.app/gomoku",
           "gamePlatform": ["Web Browser", "Mobile Browser"],
           "applicationCategory": "GameApplication",
           "genre": ["Strategy", "Board Game", "Multiplayer", "Gomoku"],
@@ -156,10 +164,78 @@
             "minValue": 1,
             "maxValue": 2
           }
+        },
+        {
+          "@type": "VideoGame",
+          "name": "Memory Match Blitz",
+          "url": "https://onlinefreegames.vercel.app/memory",
+          "gamePlatform": ["Web Browser", "Mobile Browser"],
+          "applicationCategory": "GameApplication",
+          "genre": ["Cognitive", "Memory", "Board Game"],
+          "playMode": ["SinglePlayer", "MultiPlayer"],
+          "numberOfPlayers": {
+            "@type": "QuantitativeValue",
+            "minValue": 1,
+            "maxValue": 2
+          }
+        },
+        {
+          "@type": "VideoGame",
+          "name": "Ludo Championship",
+          "url": "https://onlinefreegames.vercel.app/ludo",
+          "gamePlatform": ["Web Browser", "Mobile Browser"],
+          "applicationCategory": "GameApplication",
+          "genre": ["Family", "Board Game", "Multiplayer"],
+          "playMode": ["SinglePlayer", "MultiPlayer"],
+          "numberOfPlayers": {
+            "@type": "QuantitativeValue",
+            "minValue": 2,
+            "maxValue": 4
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://onlinefreegames.vercel.app/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "How to play free online 2-player games on games4u?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Simply choose a game on games4u (Connect 4, Tic-Tac-Toe, Gomoku, Memory Match, or Ludo) and click Online Quick Match for instant random matchmaking, or create a private room to invite a friend with a 6-letter room code. No downloads or signups required."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I play 2-player or 4-player Ludo online with friends?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes! games4u supports 2-player, 3-player, and 4-player Ludo Championship. You can create a private room and share the room code with up to 3 friends, or battle against smart AI bots."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I play Connect 4 and Tic-Tac-Toe solo against AI?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, all games on games4u feature intelligent AI computer bot opponents with multiple difficulty modes from casual to impossible Grandmaster level."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is games4u completely free with no downloads or paywalls?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, games4u is 100% free with zero paywalls, zero app downloads, and no forced advertisements. It works instantly in Chrome, Safari, Edge, and Firefox across mobile and desktop."
+              }
+            }
+          ]
         }
       ]
     }
     </script>
+
+
 
     <!-- Preconnect & Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

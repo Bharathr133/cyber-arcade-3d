@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { 
-  User, Trophy, Award, Dices, Layers, Grid, ArrowLeft, LogOut, Edit2, ShieldCheck, Flame, TrendingUp
+  User, Trophy, Award, Dices, Layers, Grid, ArrowLeft, LogOut, Edit2, ShieldCheck, Flame, TrendingUp, Lock, Key, RefreshCw, Check, AlertCircle, Eye, EyeOff
 } from 'lucide-react';
 import { saveUserProfile, getTier } from '../utils/userProfile.js';
 import { soundSynth } from '../utils/soundSynth.js';
 import { adminService } from '../services/adminService.js';
+import { authService } from '../services/authService.js';
+
 
 export default function ProfilePage({
   profile,
@@ -19,6 +21,16 @@ export default function ProfilePage({
   const [isEditing, setIsEditing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Password Management State
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isPasswordFormOpen, setIsPasswordFormOpen] = useState(false);
+
 
   const totalMatches = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
   const currentTier = getTier(profile?.rating || 1200, totalMatches);
@@ -60,6 +72,40 @@ export default function ProfilePage({
     setSuccessMessage('Profile updated successfully!');
     setTimeout(() => setSuccessMessage(''), 3000);
   };
+
+  // Password Management Handler
+  const handleUpdatePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+
+    setPasswordLoading(true);
+    const res = await authService.updatePassword(newPassword);
+    setPasswordLoading(false);
+
+    if (res.success) {
+      soundSynth.playVictory();
+      setPasswordSuccess('Password saved! You can now log in with both Google and this password.');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setIsPasswordFormOpen(false);
+        setPasswordSuccess('');
+      }, 2500);
+    } else {
+      setPasswordError(res.error || 'Failed to update password.');
+    }
+  };
+
 
   return (
     <div style={{
@@ -764,7 +810,109 @@ export default function ProfilePage({
             )}
           </div>
         </div>
+
+        {/* Dynamic In-App Password Setting for Google/OAuth Players */}
+        {isRegistered && (
+          <div style={{ marginTop: '18px', paddingTop: '18px', borderTop: '1px solid #F4F4F5' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Key size={15} color="#0F172A" />
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#0F172A' }}>
+                    Account Password & Login Credentials
+                  </span>
+                </div>
+                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#71717A' }}>
+                  Set or update your password to sign in via Email & Password from any device.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPasswordFormOpen(prev => !prev);
+                  setPasswordError('');
+                  setPasswordSuccess('');
+                }}
+                className="btn-secondary"
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  gap: '6px'
+                }}
+              >
+                <Lock size={13} />
+                <span>{isPasswordFormOpen ? 'Cancel' : 'Set / Update Password'}</span>
+              </button>
+            </div>
+
+            {isPasswordFormOpen && (
+              <form onSubmit={handleUpdatePassword} style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '420px' }}>
+                {passwordError && (
+                  <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 12px', color: '#DC2626', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                    <span>{passwordError}</span>
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '8px 12px', color: '#16A34A', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Check size={14} style={{ flexShrink: 0 }} />
+                    <span>{passwordSuccess}</span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569' }}>NEW PASSWORD</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min. 6 characters"
+                      style={{ width: '100%', padding: '8px 36px 8px 10px', borderRadius: '8px', border: '1.5px solid #E2E8F0', fontSize: '12px', boxSizing: 'border-box' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(p => !p)}
+                      style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+                    >
+                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '800', color: '#475569' }}>CONFIRM PASSWORD</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #E2E8F0', fontSize: '12px', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="btn-primary"
+                  style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: '800', alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {passwordLoading ? <RefreshCw size={14} className="animate-spin" /> : <Lock size={14} />}
+                  <span>{passwordLoading ? 'Saving...' : 'Save Password'}</span>
+                </button>
+              </form>
+            )}
+          </div>
+        )}
       </div>
+
     </div>
   );
 }

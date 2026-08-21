@@ -23,17 +23,14 @@ export default function GlobalLeaderboardModal({
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
     if (isOpen) {
-      const configured = isCloudConfigured();
-      setHasCloud(configured);
       document.body.style.overflow = 'hidden';
-      if (configured) {
-        loadLeaderboard(activeTab);
-      }
+      loadLeaderboard(activeTab);
     }
     return () => {
       document.body.style.overflow = originalOverflow;
     };
   }, [isOpen, activeTab]);
+
 
   const loadLeaderboard = async (tab) => {
     setIsLoading(true);
@@ -63,36 +60,11 @@ export default function GlobalLeaderboardModal({
   ];
 
 
-  // Dynamic Leaderboard: Combines cloud database records or initializes with current user's live stats
+  // Global Leaderboard: Shows real players from the cloud database
   const activeLeaderboardList = useMemo(() => {
     if (leaderboard && leaderboard.length > 0) return leaderboard;
-    if (currentUserProfile) {
-      const currentGameKey = activeTab;
-      const gameStat = currentUserProfile.gameStats?.[currentGameKey] || {};
-      const wins = Number(gameStat.wins || currentUserProfile.wins || 0);
-      const losses = Number(gameStat.losses || currentUserProfile.losses || 0);
-      const draws = Number(gameStat.draws || currentUserProfile.draws || 0);
-      const total = wins + losses + draws;
-      const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
-      return [{
-        id: currentUserProfile.id,
-        rank: 1,
-        name: currentUserProfile.name,
-        gamertag: currentUserProfile.gamertag,
-        avatarId: currentUserProfile.avatarId || '1',
-        rating: Number(gameStat.rating || currentUserProfile.rating || 1200),
-        level: Number(gameStat.level || currentUserProfile.level || 1),
-        xp: Number(gameStat.xp || currentUserProfile.xp || 0),
-        wins,
-        losses,
-        draws,
-        totalMatches: total,
-        winRate,
-        status: 'ONLINE'
-      }];
-    }
     return [];
-  }, [leaderboard, currentUserProfile, activeTab]);
+  }, [leaderboard]);
 
   // Filter players based on search query
   const filteredLeaderboard = useMemo(() => {
@@ -107,12 +79,13 @@ export default function GlobalLeaderboardModal({
 
   // Current player's ranking in this list
   const currentRankIndex = useMemo(() => {
-    if (!currentUserProfile?.name) return -1;
+    if (!currentUserProfile?.name || !currentUserProfile?.isRegistered) return -1;
     const myName = currentUserProfile.name.toLowerCase().trim();
     return activeLeaderboardList.findIndex(p => p.name?.toLowerCase().trim() === myName || p.id === currentUserProfile.id);
   }, [activeLeaderboardList, currentUserProfile]);
 
   const myCurrentRank = currentRankIndex !== -1 ? activeLeaderboardList[currentRankIndex] : null;
+
 
   // Top 3 Podium
   const top1 = activeLeaderboardList[0];
@@ -539,23 +512,26 @@ export default function GlobalLeaderboardModal({
           justifyContent: 'space-between',
           flexShrink: 0
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <User size={16} color="#38bdf8" />
-            <div style={{ fontSize: '12px', fontWeight: '800' }}>
-              {currentUserProfile?.name || 'Your Standing'}:
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <User size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: '12px', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentUserProfile?.name || 'Player'}:
             </div>
-            <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: '900', fontFamily: 'var(--font-mono)' }}>
-              {myCurrentRank ? `Rank #${myCurrentRank.rank}` : 'Unranked (Play a match)'}
+            <span style={{ fontSize: '12px', color: currentUserProfile?.isRegistered ? '#38bdf8' : '#F59E0B', fontWeight: '900', fontFamily: 'var(--font-mono)' }}>
+              {currentUserProfile?.isRegistered 
+                ? (myCurrentRank ? `Rank #${myCurrentRank.rank}` : 'Ranked Online Player')
+                : 'Guest Account (Scores Local)'}
             </span>
           </div>
 
-          <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#94a3b8' }}>
+          <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: '#94a3b8', flexShrink: 0 }}>
             <strong>{currentUserProfile?.rating || 1200}</strong> ELO
           </div>
         </div>
       </div>
     </div>
   );
+
 
   return createPortal(modalContent, document.body);
 }

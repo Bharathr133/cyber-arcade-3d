@@ -1,19 +1,26 @@
 {
-  "name": "Online Free Games",
-  "short_name": "Free Games",
-  "description": "Free Online 2-Player Strategy Games: Gomoku (15x15), Connect 4, and Tic-Tac-Toe with QR Matchmaking and Live ELO Leaderboards.",
-  "start_url": "https://onlinefreegames.vercel.app/",
+  "name": "games4u Strategy Arena",
+  "short_name": "games4u",
+  "description": "Free Online 2-Player Strategy Board Games: Connect 4, Tic-Tac-Toe, Gomoku, Memory Match, and Ludo with Live ELO Leaderboards.",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#F4F4F5",
+  "theme_color": "#2563EB",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/brand-logo.jpg",
+      "sizes": "512x512 1024x1024",
+      "type": "image/jpeg",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
     }
   ],
+
   "categories": ["games", "entertainment", "strategy"]
 }

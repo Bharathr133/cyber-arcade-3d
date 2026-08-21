@@ -1,8 +1,9 @@
 import React from 'react';
 import { 
-  Trophy, ShieldAlert, MinusCircle, RotateCcw, Home, Sparkles, 
+  Trophy, ShieldAlert, MinusCircle, RotateCcw, Home, Zap, 
   TrendingUp, TrendingDown, Check, X, UserX, Loader2 
 } from 'lucide-react';
+
 
 export default function InGameResultBar({
   outcome, // 'WIN', 'LOSS', 'DRAW'
@@ -136,10 +137,11 @@ export default function InGameResultBar({
                   gap: '2px'
                 }}
               >
-                <Sparkles size={11} />
+                <Zap size={11} />
                 +{xpGained} XP
               </span>
             )}
+
           </div>
         </div>
       </div>

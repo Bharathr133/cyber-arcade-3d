@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Trophy, ShieldAlert, MinusCircle, RotateCcw, LayoutGrid, Share2, Check, X, Sparkles, Flame, Award } from 'lucide-react';
+import { Trophy, ShieldAlert, MinusCircle, RotateCcw, LayoutGrid, Share2, Check, X, Crown, Flame, Award } from 'lucide-react';
+
 import confetti from 'canvas-confetti';
 import { getTier } from '../utils/userProfile.js';
 
@@ -180,9 +181,10 @@ export default function MatchResultModal({
             border: isWin ? '1px solid #86efac' : isLoss ? '1px solid #fca5a5' : '1px solid #cbd5e1',
             marginBottom: '8px'
           }}>
-            {isWin && <Sparkles size={12} />}
+            {isWin && <Crown size={12} color="#15803D" />}
             <span>{isWin ? 'VICTORY ACHIEVED' : isLoss ? 'MATCH DEFEAT' : 'MATCH TIED'}</span>
           </span>
+
         </div>
 
         {/* Title */}

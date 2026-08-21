@@ -80,6 +80,7 @@ function RealisticDiceFace({ value, size = 34 }) {
 export default function LudoGame({
   profile,
   initialMode = 'VS_COMPUTER', // 'VS_COMPUTER', 'LOCAL_2P', 'LOCAL_4P'
+  localPlayerNames = null,
   onMatchFinished,
   onGoHome
 }) {
@@ -117,6 +118,17 @@ export default function LudoGame({
 
   const currentPlayerObj = activePlayers[currentTurnIdx] || activePlayers[0];
   const isCurrentPlayerBot = isBotMode && currentPlayerObj.id !== 0;
+
+  const getPlayerDisplayName = (pObj) => {
+    if (pObj.id === 0) return localPlayerNames?.p1 || profile?.display_name || profile?.name || profile?.username || 'Red Player';
+    if (isBotMode) return `${pObj.name} Bot`;
+    if (pObj.id === 1) return localPlayerNames?.p3 || 'Green Player';
+    if (pObj.id === 2) return localPlayerNames?.p2 || 'Yellow Player';
+    if (pObj.id === 3) return localPlayerNames?.p4 || 'Blue Player';
+    return pObj.name;
+  };
+
+
 
   // Turn Countdown Timer
   useEffect(() => {
@@ -285,11 +297,12 @@ export default function LudoGame({
     setMovableTokenIds([]);
 
     // Check Victory
-    const homeTokensCount = playerTokens.filter(t => t.step >= 56).length;
+    const homeTokensCount = updatedPlayerTokens.filter(t => t.step >= 56).length;
     if (homeTokensCount === 4) {
       handlePlayerVictory(pId);
       return;
     }
+
 
     // Bonus Turn on 6 or capture
     if (roll === 6 || capturedOpponent) {
@@ -344,24 +357,26 @@ export default function LudoGame({
 
   // Victory Handler
   const handlePlayerVictory = (winningPlayerId) => {
-    const winningPlayer = LUDO_PLAYERS.find(p => p.id === winningPlayerId);
+    const winningPlayer = LUDO_PLAYERS.find(p => p.id === winningPlayerId) || LUDO_PLAYERS[0];
     setWinner(winningPlayer);
     confetti({ particleCount: 100, spread: 80, origin: { y: 0.6 } });
     soundSynth.playVictory();
 
-    const isHumanWinner = winningPlayerId === 0;
+    const isHumanWinner = isBotMode ? winningPlayerId === 0 : true;
+    const winnerDisplayName = getPlayerDisplayName(winningPlayer);
     setResultModal({
       isOpen: true,
-      outcome: isHumanWinner ? 'WIN' : 'LOSS',
-      ratingDelta: isHumanWinner ? 25 : -12,
-      xpGained: isHumanWinner ? 60 : 20,
-      reason: `${winningPlayer.name} reached home with all 4 pieces and won!`
+      outcome: isBotMode ? (isHumanWinner ? 'WIN' : 'LOSS') : 'WIN',
+      ratingDelta: isBotMode ? (isHumanWinner ? 25 : -12) : 20,
+      xpGained: isBotMode ? (isHumanWinner ? 60 : 20) : 40,
+      reason: `${winnerDisplayName} reached home with all 4 tokens and won!`
     });
 
     if (onMatchFinished) {
-      onMatchFinished('ludo', isHumanWinner ? 'WIN' : 'LOSS', winningPlayer.name);
+      onMatchFinished('ludo', isHumanWinner ? 'WIN' : 'LOSS', winnerDisplayName);
     }
   };
+
 
   const getTokenCoordinates = (playerObj, token) => {
     if (token.step === -1) {
@@ -518,8 +533,9 @@ export default function LudoGame({
             background: currentPlayerObj.color
           }} />
           <span style={{ fontSize: '13px', fontWeight: '900', color: '#0f172a', fontFamily: 'var(--font-heading)' }}>
-            {currentPlayerObj.name}'s Turn {isCurrentPlayerBot && '(Bot)'}
+            {getPlayerDisplayName(currentPlayerObj)}'s Turn
           </span>
+
         </div>
 
         <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', fontFamily: 'var(--font-mono)' }}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Crown, Sparkles, Zap, Flame } from 'lucide-react';
+import { Trophy, Crown, Zap } from 'lucide-react';
 
 export default function InBoardVictoryBadge({
   winner,
@@ -98,41 +98,7 @@ export default function InBoardVictoryBadge({
         maxWidth: '360px'
       }}
     >
-      {/* 1. Smooth Rising Energy Sparks / Blaster Ray Streamers (100% GPU CSS) */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: '-40px -20px',
-          overflow: 'visible',
-          pointerEvents: 'none',
-          zIndex: -1
-        }}
-      >
-        {/* Rising Golden Star Particles */}
-        {[
-          { left: '15%', delay: '0s', dur: '1.8s', size: 14 },
-          { left: '30%', delay: '0.4s', dur: '2.1s', size: 18 },
-          { left: '50%', delay: '0.2s', dur: '1.6s', size: 22 },
-          { left: '70%', delay: '0.6s', dur: '2.0s', size: 16 },
-          { left: '85%', delay: '0.3s', dur: '1.7s', size: 20 },
-        ].map((spark, idx) => (
-          <div
-            key={idx}
-            style={{
-              position: 'absolute',
-              bottom: '10px',
-              left: spark.left,
-              animation: `smooth-rise-sparkle ${spark.dur} infinite ease-out ${spark.delay}`,
-              opacity: 0,
-              filter: `drop-shadow(0 0 8px ${borderColor})`
-            }}
-          >
-            <Sparkles size={spark.size} color={borderColor} />
-          </div>
-        ))}
-      </div>
-
-      {/* 2. Premium Metallic Victory Tag Badge */}
+      {/* Premium Metallic Victory Tag Badge */}
       <div
         className="animate-pop-in"
         style={{
@@ -165,7 +131,7 @@ export default function InBoardVictoryBadge({
           }}
         />
 
-        {/* Crown / Trophy Icon with Pulse Glow */}
+        {/* Crown / Victory Header with Pulse Glow */}
         <div
           style={{
             display: 'flex',
@@ -175,7 +141,7 @@ export default function InBoardVictoryBadge({
             filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))'
           }}
         >
-          <Crown size={22} color="#FEF08A" fill="#FACC15" />
+          <Crown size={20} color="#FEF08A" fill="#FACC15" />
           <span
             style={{
               fontSize: '11px',
@@ -188,7 +154,7 @@ export default function InBoardVictoryBadge({
           >
             VICTORY
           </span>
-          <Crown size={22} color="#FEF08A" fill="#FACC15" />
+          <Crown size={20} color="#FEF08A" fill="#FACC15" />
         </div>
 
         {/* Winner Tag Text (e.g. "RED WINS!") */}
@@ -209,28 +175,16 @@ export default function InBoardVictoryBadge({
       </div>
 
       <style>{`
-        @keyframes smooth-rise-sparkle {
+        @keyframes shimmer-sweep {
           0% {
-            transform: translate3d(0, 0, 0) scale(0.4) rotate(0deg);
-            opacity: 0;
+            left: -100%;
           }
-          30% {
-            opacity: 1;
-            transform: translate3d(0, -25px, 0) scale(1.1) rotate(45deg);
-          }
-          70% {
-            opacity: 0.8;
-            transform: translate3d(0, -65px, 0) scale(0.9) rotate(90deg);
+          60% {
+            left: 140%;
           }
           100% {
-            opacity: 0;
-            transform: translate3d(0, -100px, 0) scale(0.2) rotate(135deg);
+            left: 140%;
           }
-        }
-        @keyframes shimmer-sweep {
-          0% { left: -100%; }
-          40% { left: 160%; }
-          100% { left: 160%; }
         }
       `}</style>
     </div>

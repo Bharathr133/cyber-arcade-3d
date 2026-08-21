@@ -2,17 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, Zap, Users, Copy, Check, ShieldCheck, 
-  ArrowRight, Radio, RefreshCw, Trophy, Crown, Sparkles, Play, Edit3, User, Bot, Clock, AlertTriangle, Globe
+  ArrowRight, Radio, RefreshCw, Trophy, Crown, Play, Edit3, User, Bot, Clock, AlertTriangle, Globe
 } from 'lucide-react';
+import ArcadeRollingLoader from './ArcadeRollingLoader.jsx';
+
+
 import { matchmakingService } from '../services/matchmakingService.js';
 import { realtimeManager } from '../services/realtimeManager.js';
+import { presenceService } from '../services/presenceService.js';
 import { AVATARS, saveUserProfile } from '../utils/userProfile.js';
 import { soundSynth } from '../utils/soundSynth.js';
 import { getSupabase } from '../utils/supabaseClient.js';
 import { formatErrorMessage } from '../utils/errorHandler.js';
 
 export default function OnlineMatchmakingModal({
-
   isOpen,
   mode = 'QUICK_MATCH', // 'QUICK_MATCH', 'CREATE_PRIVATE', 'JOIN_PRIVATE'
   gameId = 'tictactoe',
@@ -25,8 +28,10 @@ export default function OnlineMatchmakingModal({
 }) {
   const [currentMode, setCurrentMode] = useState(mode);
   const [isEditingName, setIsEditingName] = useState(false);
-  const [playerName, setPlayerName] = useState(currentUserProfile?.name || 'Player');
+  const initialName = currentUserProfile?.display_name || currentUserProfile?.name || currentUserProfile?.username || (currentUserProfile?.email ? currentUserProfile.email.split('@')[0] : 'Player');
+  const [playerName, setPlayerName] = useState(initialName);
   const [avatarId, setAvatarId] = useState(currentUserProfile?.avatarId || '1');
+  const [availablePlayersCount, setAvailablePlayersCount] = useState(() => presenceService.getOnlineCount());
 
   const [status, setStatus] = useState('INITIALIZING'); // 'SEARCHING', 'WAITING_PRIVATE', 'JOINING', 'READY_TO_START', 'NO_PLAYERS_FOUND', 'ERROR'
   const [searchSecondsLeft, setSearchSecondsLeft] = useState(25);
@@ -36,6 +41,24 @@ export default function OnlineMatchmakingModal({
   const [errorMessage, setErrorMessage] = useState('');
   const [matchLobbyData, setMatchLobbyData] = useState(null);
   const [countdown, setCountdown] = useState(12);
+
+  // Synchronize profile changes to player name state
+  useEffect(() => {
+    const realName = currentUserProfile?.display_name || currentUserProfile?.name || currentUserProfile?.username || (currentUserProfile?.email ? currentUserProfile.email.split('@')[0] : null);
+    if (realName) {
+      setPlayerName(realName);
+    }
+    if (currentUserProfile?.avatarId) {
+      setAvatarId(currentUserProfile.avatarId);
+    }
+  }, [currentUserProfile]);
+
+  // Subscribe to live online presence
+  useEffect(() => {
+    const unsub = presenceService.subscribe((count) => setAvailablePlayersCount(count));
+    return () => unsub();
+  }, []);
+
 
   const matchLobbyDataRef = useRef(matchLobbyData);
   matchLobbyDataRef.current = matchLobbyData;
@@ -96,39 +119,31 @@ export default function OnlineMatchmakingModal({
       isCancelledRef.current = true;
       setStatus('INITIALIZING');
       setRoomData(null);
-      setErrorMessage('');
-      setJoinTokenInput('');
       setMatchLobbyData(null);
-      setCountdown(12);
       setSearchSecondsLeft(25);
-      setIsEditingName(false);
       return;
     }
 
+    isCancelledRef.current = false;
     setCurrentMode(mode);
-    const currentName = currentUserProfile?.name || 'Player';
-    const currentAv = currentUserProfile?.avatarId || '1';
-    setPlayerName(currentName);
-    setAvatarId(currentAv);
     setSearchSecondsLeft(25);
+    setCountdown(12);
 
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const joinCode = urlParams.get('join');
-      if (joinCode) {
-        setJoinTokenInput(joinCode.toUpperCase());
-      }
-    } catch (e) {}
+    const activeName = currentUserProfile?.display_name || currentUserProfile?.name || currentUserProfile?.username || (currentUserProfile?.email ? currentUserProfile.email.split('@')[0] : 'Player');
+    setPlayerName(activeName);
+    setAvatarId(currentUserProfile?.avatarId || '1');
 
-    startMatchmakingFlow(mode, currentName, currentAv);
+    startMatchmakingFlow(mode, activeName, currentUserProfile?.avatarId || '1');
+
+    return () => {
+      isCancelledRef.current = true;
+    };
   }, [isOpen, mode, gameId]);
 
   const startMatchmakingFlow = async (targetMode, currentName, currentAv) => {
-    isCancelledRef.current = false;
-    setErrorMessage('');
-    setSearchSecondsLeft(25);
-
     try {
+      setErrorMessage('');
+      
       if (targetMode === 'QUICK_MATCH') {
         setStatus('SEARCHING');
         soundSynth.playRotate();
@@ -165,7 +180,7 @@ export default function OnlineMatchmakingModal({
             opponent: {
               name: currentName,
               avatarId: currentAv,
-              rating: 1200
+              rating: currentUserProfile?.rating || 1200
             }
           });
 
@@ -182,11 +197,17 @@ export default function OnlineMatchmakingModal({
 
           realtimeManager.subscribeToRoom(currentRoom.id, currentUserProfile?.id, {
             onPlayerJoined: (payload) => {
+              const opp = payload?.opponent || {};
+              const oppName = opp.name || opp.display_name || (opp.username ? `@${opp.username}` : 'Challenger');
               const lobby = {
                 matchId: payload.match_id,
                 roomId: currentRoom.id,
                 myRole: 'X',
-                opponent: payload.opponent || { name: 'Challenger', avatarId: '2', rating: 1200 }
+                opponent: {
+                  name: oppName,
+                  avatarId: opp.avatarId || '2',
+                  rating: opp.rating || 1200
+                }
               };
               setMatchLobbyData(lobby);
               setStatus('READY_TO_START');
@@ -230,11 +251,17 @@ export default function OnlineMatchmakingModal({
 
           realtimeManager.subscribeToRoom(currentRoom.id, currentUserProfile?.id, {
             onPlayerJoined: (payload) => {
+              const opp = payload?.opponent || {};
+              const oppName = opp.name || opp.display_name || (opp.username ? `@${opp.username}` : 'Challenger');
               const lobby = {
                 matchId: payload.match_id,
                 roomId: currentRoom.id,
                 myRole: 'X',
-                opponent: payload.opponent || { name: 'Player 2', avatarId: '2', rating: 1200 }
+                opponent: {
+                  name: oppName,
+                  avatarId: opp.avatarId || '2',
+                  rating: opp.rating || 1200
+                }
               };
               setMatchLobbyData(lobby);
               setStatus('READY_TO_START');
@@ -552,42 +579,48 @@ export default function OnlineMatchmakingModal({
           )}
         </div>
 
-        {/* 1. Searching Public Queue with Modern Radar Animation */}
+        {/* 1. Searching Public Queue with Smooth Arcade Game Icons Rolling Reel */}
         {status === 'SEARCHING' && (
-          <div style={{ textAlign: 'center', padding: '16px 12px 10px' }}>
-            {/* Animated Radar Pulse */}
-            <div style={{ position: 'relative', width: '100px', height: '100px', margin: '0 auto 20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center', padding: '16px 12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{
+              background: '#0F172A',
+              borderRadius: '20px',
+              padding: '20px 16px',
+              width: '100%',
+              boxSizing: 'border-box',
+              marginBottom: '16px',
+              border: '1px solid #1E293B',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.2)'
+            }}>
+              <ArcadeRollingLoader
+                size="compact"
+                message="Searching Ranked Queue..."
+                submessage={`Scanning 1v1 match pool for ${gameTitle}`}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
               <div style={{
-                position: 'absolute', width: '100%', height: '100%', borderRadius: '50%',
-                background: 'rgba(37, 99, 235, 0.1)', animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite'
-              }} />
-              <div style={{
-                position: 'absolute', width: '75%', height: '75%', borderRadius: '50%',
-                background: 'rgba(37, 99, 235, 0.18)', animation: 'pulse 1.5s ease-in-out infinite'
-              }} />
-              <div style={{
-                width: '52px', height: '52px', borderRadius: '50%',
-                background: 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)',
-                color: '#ffffff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 6px 20px rgba(37, 99, 235, 0.4)',
-                zIndex: 2
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '5px 12px', borderRadius: '20px', background: '#ecfdf5',
+                border: '1px solid #a7f3d0',
+                color: '#047857', fontSize: '11px', fontWeight: '800'
               }}>
-                <Globe size={24} className="animate-spin" style={{ animationDuration: '6s' }} />
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981] animate-pulse" />
+                <span>{availablePlayersCount} {availablePlayersCount === 1 ? 'Player' : 'Players'} Online</span>
+              </div>
+
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '5px 12px', borderRadius: '20px', background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                color: '#2563eb', fontSize: '11px', fontWeight: '800'
+              }}>
+                <Clock size={12} />
+                <span>Time: {searchSecondsLeft}s</span>
               </div>
             </div>
 
-            <h4 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: '900', color: '#0f172a', fontFamily: 'var(--font-heading)' }}>
-              Searching For Opponent...
-            </h4>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              padding: '4px 12px', borderRadius: '20px', background: '#eff6ff',
-              color: '#2563eb', fontSize: '12px', fontWeight: '800', margin: '0 0 16px'
-            }}>
-              <Clock size={13} />
-              <span>Time Left: {searchSecondsLeft}s</span>
-            </div>
 
             <div>
               <button
@@ -600,6 +633,7 @@ export default function OnlineMatchmakingModal({
             </div>
           </div>
         )}
+
 
         {/* 2. No Players Found Timeout Screen */}
         {status === 'NO_PLAYERS_FOUND' && (
@@ -777,14 +811,14 @@ export default function OnlineMatchmakingModal({
                   {playerName?.[0]?.toUpperCase() || 'P1'}
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: '900', color: '#0f172a' }}>
-                  {playerName || 'You'}
+                  {playerName || 'Player 1'}
                 </div>
                 <div style={{
                   display: 'inline-block', fontSize: '11px', color: '#2563eb',
                   fontWeight: '800', marginTop: '4px', background: '#eff6ff',
                   padding: '2px 8px', borderRadius: '6px'
                 }}>
-                  {matchLobbyData.myRole === 'X' ? 'ROLE: X (First)' : 'ROLE: O (Second)'}
+                  {matchLobbyData.myRole === 'X' ? 'Turn 1 (Moves First)' : 'Turn 2 (Moves Second)'}
                 </div>
               </div>
 
@@ -815,17 +849,18 @@ export default function OnlineMatchmakingModal({
                   {matchLobbyData.opponent?.name?.[0]?.toUpperCase() || 'P2'}
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: '900', color: '#0f172a' }}>
-                  {matchLobbyData.opponent?.name || 'Opponent'}
+                  {matchLobbyData.opponent?.name || 'Player 2'}
                 </div>
                 <div style={{
                   display: 'inline-block', fontSize: '11px', color: '#64748b',
                   fontWeight: '800', marginTop: '4px', background: '#f1f5f9',
                   padding: '2px 8px', borderRadius: '6px'
                 }}>
-                  {matchLobbyData.myRole === 'X' ? 'ROLE: O' : 'ROLE: X'}
+                  {matchLobbyData.myRole === 'X' ? 'Turn 2 (Moves Second)' : 'Turn 1 (Moves First)'}
                 </div>
               </div>
             </div>
+
 
             <button
               onClick={handleManualStartClick}
