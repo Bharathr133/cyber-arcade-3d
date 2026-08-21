@@ -28,9 +28,11 @@ export function getServerSupabase() {
 const ALLOWED_ORIGINS = [
   'localhost',
   '127.0.0.1',
+  'onlinefreegames.vercel.app',
   '.vercel.app',
   'cyber-arcade-3d'
 ];
+
 
 export function validateOrigin(req) {
   const origin = req.headers['origin'] || req.headers['referer'] || '';
