@@ -68,35 +68,36 @@ const DEFAULT_STATS = {
 // Route Metadata for High-Intent Dynamic Google SEO Titles & Descriptions
 const ROUTE_META = {
   home: {
-    title: 'games4u — Free Online Games, 2-Player, 4-Player & Solo Board Games',
-    desc: 'Play free online games on games4u: Connect 4, Tic-Tac-Toe, Gomoku, Memory Match, and Ludo. 2-player, 4-player, and solo vs smart AI. Instant play in any browser with no download.',
-    keywords: 'online free games, free online games, 2 player games, 4 player games, solo games, connect 4 online, tic tac toe 2 player, ludo online, gomoku 15x15, memory match, browser games unblocked, play games with friends online'
+    title: 'Play Free Online Games — 2-Player Board Games with Friends (No Download) | games4u',
+    desc: 'Play free 2-player and 4-player online games with friends in your browser. Instant real-time multiplayer Connect 4 (Four in a Row), Tic-Tac-Toe (XO), Gomoku (Five in a Row), Memory Match, and Ludo. Zero downloads, no lag.',
+    keywords: 'free online games, 2 player games online, play games with friends online, connect 4 online, tic tac toe 2 player, ludo online with friends, gomoku online, five in a row online, browser games no download, 2 player board games, online games unblocked'
   },
   gomoku: {
-    title: 'Gomoku Online (15×15 Five in a Row) — 2-Player & Solo Strategy Game | games4u',
-    desc: 'Play 15×15 Gomoku (Five in a Row) online for free. Battle real players worldwide or practice vs Grandmaster AI bot. Free instant browser strategy game with zero downloads.',
-    keywords: 'gomoku online, five in a row online, 15x15 gomoku, 2 player gomoku, play gomoku free, gomoku multiplayer, online board games'
+    title: 'Gomoku Online — Play 15×15 Five in a Row Free with Friends | games4u',
+    desc: 'Play 15×15 Gomoku (Five in a Row) online for free. Real-time 2-player multiplayer strategy board game against friends or Grandmaster AI bots with zero downloads.',
+    keywords: 'gomoku online, five in a row online, 15x15 gomoku, play gomoku with friends, 5 in a row board game, gomoku 2 player free, gomoku unblocked, five in a row browser'
   },
   connect4: {
-    title: 'Connect 4 Online (7×6 Gravity Grid) — 2-Player Free Board Game | games4u',
-    desc: 'Play Connect 4 multiplayer online for free. Real-time 2-player matchmaking, private 6-letter room codes with friends, or solo play vs smart AI bot.',
-    keywords: 'connect 4 online, connect four 2 player, free connect 4, play connect 4 with friends, 2 player board games online, connect 4 unblocked'
+    title: 'Connect 4 Online — Play Free 2-Player Four in a Row with Friends | games4u',
+    desc: 'Play Connect 4 online for free with friends or challenge the impossible AI bot. Real-time 2-player gravity grid match, private 6-letter room codes, zero download in browser.',
+    keywords: 'connect 4 online, play connect 4 online free, connect 4 2 player, four in a row online, connect 4 with friends, connect four unblocked, drop four online, 2 player connect 4 link'
   },
   tictactoe: {
-    title: 'Tic-Tac-Toe Online (3×3 Blitz) — 2-Player Multiplayer & AI Game | games4u',
-    desc: 'Play free 2-player Tic-Tac-Toe online in real time. Invite friends with private codes or challenge the impossible AI engine. Zero lag, instant play.',
-    keywords: 'tic tac toe online, tic tac toe 2 player, free tic tac toe, 3x3 tic tac toe multiplayer, play tic tac toe with friends'
+    title: 'Tic Tac Toe Online — Play 2-Player XO Game with Friends Free | games4u',
+    desc: 'Play 2-player Tic-Tac-Toe (XO / Noughts and Crosses) online in real time. Invite friends with private room codes or beat the impossible AI bot. Instant play in browser.',
+    keywords: 'tic tac toe online, play tic tac toe with friends, tic tac toe 2 player, xo game online, noughts and crosses online, tic tac toe impossible ai, 3x3 blitz, tic tac toe link'
   },
   memory: {
-    title: 'Memory Match Online — Solo Campaign & 2-Player Brain Game | games4u',
-    desc: 'Train your brain with free Memory Match game. 5 progressive campaign levels, combo score streaks, and 2-player pass & play modes. 100% free.',
-    keywords: 'memory match online, memory card games, brain training games, free memory games, solo memory game, 2 player memory game'
+    title: 'Memory Match Online — Free 2-Player & Solo Brain Card Game | games4u',
+    desc: 'Play free online Memory Match card game. Match pairs, test your visual memory in 5 campaign levels or challenge friends in 2-player turn-based mode.',
+    keywords: 'memory match online, matching pairs game, memory card game free, brain training games browser, 2 player memory game online, memory puzzle free'
   },
   ludo: {
-    title: 'Ludo Championship (2–4 Player Online & Solo) — Free Board Game | games4u',
-    desc: 'Play 2-player, 3-player, and 4-player Ludo online for free. Real-time multiplayer, safe star zones, 3D animated dice, and smart AI bot matches.',
-    keywords: 'ludo online, ludo 2 player, ludo 4 player, play ludo with friends online, free ludo game, ludo multiplayer, online board games ludo'
+    title: 'Ludo Online — Play 2-Player & 4-Player Ludo with Friends Free | games4u',
+    desc: 'Play 2-player, 3-player, and 4-player Ludo online with friends. Roll 3D animated dice, race tokens home, create private room codes, or play vs smart AI bots.',
+    keywords: 'ludo online, play ludo with friends, ludo online 2 player, ludo 4 player online free, ludo room code, ludo game no download, multiplayer ludo browser'
   },
+
   leaderboard: {
     title: 'Global Top 50 Leaderboard & ELO Rankings — games4u',
     desc: 'View live global Grandmaster rankings, player ratings, and win rates across Connect 4, Tic-Tac-Toe, Gomoku, Memory, and Ludo.',
