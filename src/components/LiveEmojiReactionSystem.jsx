@@ -17,12 +17,14 @@ const QUICK_EMOJIS = [
 ];
 
 const QUICK_PHRASES = [
-  "Nice move!",
-  "Good game!",
-  "Oops!",
-  "Thinking...",
-  "Well played!",
-  "Rematch?"
+  { text: "Nice move!", emoji: "🎯" },
+  { text: "Good game!", emoji: "🤝" },
+  { text: "Well played!", emoji: "👏" },
+  { text: "Thinking...", emoji: "🤔" },
+  { text: "Oops!", emoji: "😅" },
+  { text: "Almost had it!", emoji: "🔥" },
+  { text: "One more game?", emoji: "⚔️" },
+  { text: "Rematch!", emoji: "🏆" }
 ];
 
 function getEmojiAnimationClass(emoji) {
@@ -43,8 +45,54 @@ export default function LiveEmojiReactionSystem({
   const [activeSpeechBubbles, setActiveSpeechBubbles] = useState([]);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(null);
   const cooldownTimerRef = useRef(null);
   const scrollContainerRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const highlightedIndexRef = useRef(highlightedIndex);
+  highlightedIndexRef.current = highlightedIndex;
+
+  // Window Touch Drag-to-Select Listener for Mobile Gestures
+  useEffect(() => {
+    const handleWindowTouchMove = (e) => {
+      if (!isDraggingRef.current) return;
+      const touch = e.touches[0];
+      const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (targetEl) {
+        const itemEl = targetEl.closest('[data-phrase-index]');
+        if (itemEl) {
+          const idx = parseInt(itemEl.getAttribute('data-phrase-index'), 10);
+          if (!isNaN(idx)) {
+            setHighlightedIndex(idx);
+            return;
+          }
+        }
+      }
+      setHighlightedIndex(null);
+    };
+
+    const handleWindowTouchEnd = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        const currentIdx = highlightedIndexRef.current;
+        if (currentIdx !== null && QUICK_PHRASES[currentIdx]) {
+          handleSelectPhrase(QUICK_PHRASES[currentIdx].text);
+        }
+        setHighlightedIndex(null);
+      }
+    };
+
+    window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
+    window.addEventListener('touchend', handleWindowTouchEnd);
+    window.addEventListener('touchcancel', handleWindowTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('touchend', handleWindowTouchEnd);
+      window.removeEventListener('touchcancel', handleWindowTouchEnd);
+    };
+  }, []);
+
 
   // Handle incoming reaction from opponent
   useEffect(() => {
@@ -253,65 +301,99 @@ export default function LiveEmojiReactionSystem({
       ))}
 
 
-      {/* 3. QUICK CHAT POPUP DRAWER (Opens smoothly above bottom dock) */}
+      {/* 3. QUICK CHAT VERTICAL POPUP DRAWER (With Hold & Slide Drag-to-Select Support) */}
       {chatDrawerOpen && (
         <div style={{
           width: '100%',
           maxWidth: '440px',
           background: '#FFFFFF',
-          border: '1.5px solid #E4E4E7',
-          borderRadius: '14px',
-          padding: '10px',
-          boxShadow: '0 12px 32px -4px rgba(0,0,0,0.18)',
-          marginBottom: '6px',
+          border: '1.5px solid #CBD5E1',
+          borderRadius: '16px',
+          padding: '12px',
+          boxShadow: '0 16px 36px -4px rgba(15, 23, 42, 0.22), 0 2px 8px rgba(0, 0, 0, 0.06)',
+          marginBottom: '8px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '6px',
+          gap: '8px',
           zIndex: 60,
-          animation: 'speechBubblePop 0.15s ease-out forwards'
+          animation: 'speechBubblePop 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-            <span style={{ fontSize: '11px', fontWeight: '800', color: '#71717A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Quick Tactical Chat
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '4px', borderBottom: '1px solid #F1F5F9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Quick Tactical Chat
+              </span>
+              <span style={{ fontSize: '10px', color: '#64748B', fontWeight: '600' }}>
+                • Tap or Slide
+              </span>
+            </div>
             <button
-              onClick={() => setChatDrawerOpen(false)}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px', color: '#71717A' }}
+              onClick={() => {
+                soundSynth.playClick();
+                setChatDrawerOpen(false);
+              }}
+              style={{ background: '#F1F5F9', border: 'none', borderRadius: '6px', cursor: 'pointer', padding: '4px', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <X size={14} />
+              <X size={13} />
             </button>
           </div>
 
+          {/* Vertical Message List */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '6px'
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            maxHeight: '260px',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            paddingRight: '2px'
           }}>
-            {QUICK_PHRASES.map((phrase, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSelectPhrase(phrase)}
-                style={{
-                  padding: '8px 6px',
-                  background: '#F4F4F5',
-                  border: '1px solid #E4E4E7',
-                  borderRadius: '8px',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  color: '#18181B',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  transition: 'background 0.1s ease, transform 0.1s ease'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#E4E4E7'}
-                onMouseLeave={(e) => e.currentTarget.style.background = '#F4F4F5'}
-              >
-                {phrase}
-              </button>
-            ))}
+            {QUICK_PHRASES.map((item, idx) => {
+              const isSelected = highlightedIndex === idx;
+
+              return (
+                <button
+                  key={idx}
+                  data-phrase-index={idx}
+                  onClick={() => handleSelectPhrase(item.text)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '9px 12px',
+                    background: isSelected ? '#EFF6FF' : '#F8FAFC',
+                    border: isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    color: isSelected ? '#1D4ED8' : '#1E293B',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                    boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.18)' : 'none',
+                    transition: 'all 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
+                    userSelect: 'none',
+                    touchAction: 'manipulation'
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  onMouseLeave={() => setHighlightedIndex(null)}
+                >
+                  <span style={{ fontSize: '16px', lineHeight: 1, flexShrink: 0 }}>
+                    {item.emoji}
+                  </span>
+                  <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.text}
+                  </span>
+                  {isSelected && (
+                    <span style={{ fontSize: '10px', fontWeight: '900', color: '#2563EB', fontFamily: 'var(--font-mono)' }}>
+                      SEND ↵
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -330,14 +412,18 @@ export default function LiveEmojiReactionSystem({
         boxSizing: 'border-box',
         gap: '6px'
       }}>
-        {/* Quick Chat Drawer Trigger Button */}
+        {/* Quick Chat Drawer Trigger Button with Hold & Slide Gesture */}
         <button
           type="button"
           onClick={() => {
             soundSynth.playClick();
             setChatDrawerOpen(prev => !prev);
           }}
-          title="Open Quick Chat Phrases"
+          onTouchStart={() => {
+            isDraggingRef.current = true;
+            setChatDrawerOpen(true);
+          }}
+          title="Tap or Hold & Drag up to select message"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -351,7 +437,7 @@ export default function LiveEmojiReactionSystem({
             fontWeight: '800',
             cursor: 'pointer',
             flexShrink: 0,
-            touchAction: 'manipulation'
+            touchAction: 'none'
           }}
         >
           <MessageSquare size={14} color={chatDrawerOpen ? '#2563EB' : '#52525B'} />
@@ -360,6 +446,7 @@ export default function LiveEmojiReactionSystem({
 
         {/* Vertical Divider */}
         <div style={{ width: '1px', height: '22px', background: '#E4E4E7', flexShrink: 0 }} />
+
 
         {/* Drag & React / Swipeable Emoji Rail */}
         <div

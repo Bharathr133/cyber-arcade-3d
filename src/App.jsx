@@ -12,7 +12,8 @@ import WelcomeCelebrationModal from './components/WelcomeCelebrationModal.jsx';
 import MobileBottomNav from './components/MobileBottomNav.jsx';
 import { CustomAlertProvider, useCustomAlert } from './components/CustomAlertProvider.jsx';
 import DesktopAppSidebar from './components/DesktopAppSidebar.jsx';
-import { ShieldCheck, RefreshCw } from 'lucide-react';
+import { ShieldCheck, RefreshCw, ArrowLeft } from 'lucide-react';
+
 
 
 import BroadcastBanner from './components/BroadcastBanner.jsx';
@@ -1251,7 +1252,47 @@ function MainApp() {
           boxSizing: 'border-box'
         }}>
           {renderActiveView()}
+
+          {/* Bottom Game Exit Action Bar (Mobile & Desktop) */}
+          {isInsideGame && activeGameMode !== 'LOBBY' && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              width: '100%',
+              marginTop: '16px',
+              marginBottom: '32px'
+            }}>
+              <button
+                onClick={() => handleNavigate('home')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '9px 24px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '800',
+                  fontFamily: 'var(--font-heading)',
+                  letterSpacing: '0.04em',
+                  color: '#DC2626',
+                  background: '#FEF2F2',
+                  border: '1.5px solid #FECACA',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#FEE2E2'; e.currentTarget.style.borderColor = '#FCA5A5'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#FEF2F2'; e.currentTarget.style.borderColor = '#FECACA'; }}
+                title="Leave match and return to Home Hub"
+              >
+                <ArrowLeft size={15} color="#DC2626" />
+                <span>EXIT MATCH</span>
+              </button>
+            </div>
+          )}
         </main>
+
 
 
         {/* Standard Enterprise 4-Column Footer (Hidden on Auth pages and in games) */}

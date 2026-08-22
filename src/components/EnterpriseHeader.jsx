@@ -134,37 +134,11 @@ export default function EnterpriseHeader({
           />
         )}
 
-        {/* LEFT ZONE: Brand & Navigation Breadcrumb OR Exit Match Button */}
+        {/* LEFT ZONE: Brand & Navigation Breadcrumb */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          {isInsideGame ? (
-            <button
-              onClick={() => {
-                soundSynth.playClick();
-                onSelectGame('home');
-              }}
-              className="btn-secondary"
-              style={{
-                padding: '6px 12px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: '700',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                color: '#DC2626',
-                border: '1px solid #FECACA',
-                background: '#FEF2F2',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-              title="Exit current game"
-            >
-              <ArrowLeft size={14} color="#DC2626" />
-              <span>EXIT MATCH</span>
-            </button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-              {/* Mobile Hamburger Menu Trigger */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            {/* Mobile Hamburger Menu Trigger (Only when outside active game) */}
+            {!isInsideGame && (
               <button
                 onClick={() => {
                   soundSynth.playClick();
@@ -184,49 +158,59 @@ export default function EnterpriseHeader({
               >
                 <Menu size={17} />
               </button>
+            )}
 
-              {/* Logo / Brand Mark with luxury crest */}
-              <div 
-                onClick={() => onSelectGame('home')}
-                style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer', userSelect: 'none' }}
-              >
-                <img 
-                  src="/brand-logo.jpg" 
-                  alt="games4u Logo" 
-                  style={{
-                    width: '30px',
-                    height: '30px',
-                    borderRadius: '8px',
-                    objectFit: 'cover',
-                    boxShadow: '0 2px 8px rgba(37,99,235,0.2)',
-                    border: '1px solid rgba(228, 228, 231, 0.8)',
-                    flexShrink: 0
-                  }}
-                />
-                <span style={{
-                  fontFamily: 'var(--font-heading)',
-                  fontSize: '17px',
-                  fontWeight: '900',
-                  color: '#18181B',
-                  letterSpacing: '-0.02em'
-                }}>
-                  games4u
+            {/* Logo / Brand Mark with luxury crest */}
+            <div 
+              onClick={() => onSelectGame('home')}
+              style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer', userSelect: 'none' }}
+              title="games4u Home"
+            >
+              <img 
+                src="/brand-logo.jpg" 
+                alt="games4u Logo" 
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '8px',
+                  objectFit: 'cover',
+                  boxShadow: '0 2px 8px rgba(37,99,235,0.2)',
+                  border: '1px solid rgba(228, 228, 231, 0.8)',
+                  flexShrink: 0
+                }}
+              />
+              <span style={{
+                fontFamily: 'var(--font-heading)',
+                fontSize: '17px',
+                fontWeight: '900',
+                color: '#18181B',
+                letterSpacing: '-0.02em'
+              }}>
+                games4u
+              </span>
+            </div>
+
+            {/* Dynamic Context Breadcrumb on Game or Subpages */}
+            {isInsideGame && currentGame && (
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium pl-2 border-l border-zinc-300">
+                <ChevronRight size={13} className="text-zinc-400" />
+                <span className="font-bold text-zinc-800 truncate max-w-[180px]">
+                  {currentGame.title}
                 </span>
               </div>
+            )}
 
-
-              {/* Dynamic Context Breadcrumb on Subpages (Desktop/Tablet) */}
-              {currentPage && !isInsideGame && (
-                <div className="hidden md:flex items-center gap-1.5 text-xs text-zinc-400 font-medium pl-2 border-l border-zinc-300">
-                  <ChevronRight size={13} className="text-zinc-400" />
-                  <span className="font-bold text-zinc-800 truncate max-w-[180px]">
-                    {currentPage.title}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+            {currentPage && !isInsideGame && (
+              <div className="hidden md:flex items-center gap-1.5 text-xs text-zinc-400 font-medium pl-2 border-l border-zinc-300">
+                <ChevronRight size={13} className="text-zinc-400" />
+                <span className="font-bold text-zinc-800 truncate max-w-[180px]">
+                  {currentPage.title}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
+
 
         {/* CENTER ZONE: In-Game Match Header Badge */}
         {isInsideGame && currentGame && (
