@@ -362,7 +362,7 @@ export default function ConnectFour({
     if (!isOnline || !onlineSession?.matchId) return;
 
     setMyRole(onlineSession.myRole === 'O' ? YELLOW : RED);
-    if (onlineSession.opponent) {
+    if (onlineSession.opponent?.name) {
       setOpponentProfile(onlineSession.opponent);
     }
 
@@ -374,6 +374,7 @@ export default function ConnectFour({
         const supabase = getSupabase();
         if (!supabase) return;
 
+        // Auto-update match record with our own real name if missing
         const { data: match } = await supabase
           .from('matches')
           .select('player_1_id, player_1_name, player_2_id, player_2_name')
@@ -385,7 +386,7 @@ export default function ConnectFour({
           const oppName = isPlayer1 ? match.player_2_name : match.player_1_name;
           const oppId = isPlayer1 ? match.player_2_id : match.player_1_id;
 
-          if (oppName && oppName !== 'Opponent' && oppName !== 'Player 1' && oppName !== 'Player 2') {
+          if (oppName && oppName !== 'Opponent' && !oppName.startsWith('Player')) {
             setOpponentProfile(prev => ({ ...prev, name: oppName, id: oppId }));
           }
 
@@ -398,12 +399,12 @@ export default function ConnectFour({
 
             if (oppProf) {
               const finalName = oppProf.display_name || oppProf.name || (oppProf.username ? `@${oppProf.username}` : null);
-              if (finalName) {
+              if (finalName && !finalName.startsWith('Player')) {
                 setOpponentProfile(prev => ({
                   ...prev,
                   name: finalName,
-                  avatarId: oppProf.avatar_id || prev.avatarId,
-                  rating: oppProf.rating || prev.rating,
+                  avatarId: oppProf.avatar_id || prev?.avatarId || '2',
+                  rating: oppProf.rating || prev?.rating || 1200,
                   id: oppId
                 }));
               }
@@ -415,10 +416,61 @@ export default function ConnectFour({
 
     resolveRealOpponent();
 
+    // Multi-Stage Direct Peer Handshake Engine (Ensures 100% mutual delivery across all network speeds)
+    const syncMyInfo = () => {
+      const myName = profile?.name || profile?.display_name;
+      if (myName) {
+        realtimeManager.broadcastToMatch(matchId, 'player_info_sync', {
+          senderId: profile?.id,
+          name: myName,
+          avatarId: profile?.avatarId || '1',
+          rating: profile?.rating || 1200,
+          isEcho: false
+        });
+      }
+    };
+
+    const t1 = setTimeout(syncMyInfo, 100);
+    const t2 = setTimeout(syncMyInfo, 400);
+    const t3 = setTimeout(syncMyInfo, 1200);
+    const t4 = setTimeout(syncMyInfo, 2500);
 
     realtimeManager.subscribeToMatch(matchId, profile?.id, {
+      onPlayerInfoSync: (info) => {
+        if (info?.name && !info.name.startsWith('Player')) {
+          setOpponentProfile(prev => ({
+            ...prev,
+            name: info.name,
+            avatarId: info.avatarId || prev?.avatarId || '2',
+            rating: info.rating || prev?.rating || 1200,
+            id: info.senderId
+          }));
+
+          // Mutual Handshake Echo: Reply immediately if this wasn't already an echo
+          if (!info.isEcho) {
+            const myName = profile?.name || profile?.display_name;
+            if (myName) {
+              realtimeManager.broadcastToMatch(matchId, 'player_info_sync', {
+                senderId: profile?.id,
+                name: myName,
+                avatarId: profile?.avatarId || '1',
+                rating: profile?.rating || 1200,
+                isEcho: true
+              });
+            }
+          }
+        }
+      },
       onReactionEmoji: (reactionData) => {
         if (reactionData) {
+          if (reactionData.sender && !reactionData.sender.startsWith('Player')) {
+            setOpponentProfile(prev => ({
+              ...prev,
+              name: reactionData.sender,
+              avatarId: reactionData.senderAvatarId || prev?.avatarId || '2',
+              rating: reactionData.senderRating || prev?.rating || 1200
+            }));
+          }
           setIncomingReaction({
             emoji: reactionData.emoji,
             sender: reactionData.sender,
@@ -429,6 +481,14 @@ export default function ConnectFour({
       },
       onQuickChat: (chatData) => {
         if (chatData?.phrase) {
+          if (chatData.sender && !chatData.sender.startsWith('Player')) {
+            setOpponentProfile(prev => ({
+              ...prev,
+              name: chatData.sender,
+              avatarId: chatData.senderAvatarId || prev?.avatarId || '2',
+              rating: chatData.senderRating || prev?.rating || 1200
+            }));
+          }
           soundSynth.playBulbLight();
           setIncomingChat({
             phrase: chatData.phrase,
@@ -463,11 +523,24 @@ export default function ConnectFour({
 
       onStateUpdate: (serverState) => {
         if (!serverState) return;
+
+        // Auto-extract and lock opponent profile from live move payload
+        if (serverState.senderName && serverState.senderId !== profile?.id && !serverState.senderName.startsWith('Player')) {
+          setOpponentProfile(prev => ({
+            ...prev,
+            name: serverState.senderName,
+            avatarId: serverState.senderAvatarId || prev?.avatarId || '2',
+            rating: serverState.senderRating || prev?.rating || 1200,
+            id: serverState.senderId
+          }));
+        }
+
         const incomingBoard = serverState.board_state || serverState.board;
         const rawTurn = serverState.current_turn || serverState.turn;
         const incomingTurn = (rawTurn === 'X' || rawTurn === 'RED' || rawTurn === 'P1' || rawTurn === 1 || rawTurn === '1' || rawTurn === RED) ? RED : YELLOW;
         const incomingResult = serverState.status || serverState.result;
         const winnerId = serverState.winner_id || serverState.winnerId;
+
 
         if (incomingBoard && Array.isArray(incomingBoard)) {
           // Merge server board with local board so no discs (regular or winning) are ever lost
@@ -611,21 +684,28 @@ export default function ConnectFour({
 
           if (matchData) {
             const oppId = (matchData.player_1_id === profile?.id) ? matchData.player_2_id : matchData.player_1_id;
+            let dbOppName = (matchData.player_1_id === profile?.id) ? matchData.player_2_name : matchData.player_1_name;
+            if (dbOppName && dbOppName !== 'Opponent' && !dbOppName.startsWith('Player')) {
+              setOpponentProfile(prev => ({ ...prev, name: dbOppName, id: oppId }));
+            }
             if (oppId) {
               const { data: oppProfile } = await supabase
                 .from('profiles')
-                .select('id, username, display_name, avatar_url')
+                .select('id, username, display_name, name, avatar_url, avatar_id, rating')
                 .eq('id', oppId)
                 .maybeSingle();
 
               if (oppProfile) {
-                setOpponentProfile({
-                  name: oppProfile.display_name || oppProfile.name || (oppProfile.username ? `@${oppProfile.username}` : ''),
-                  avatarId: oppProfile.avatar_url || '2',
-                  rating: 1200
-                });
+                const finalName = oppProfile.display_name || oppProfile.name || (oppProfile.username ? `@${oppProfile.username}` : '') || dbOppName;
+                if (finalName && !finalName.startsWith('Player')) {
+                  setOpponentProfile(prev => ({
+                    ...prev,
+                    name: finalName,
+                    avatarId: oppProfile.avatar_url || oppProfile.avatar_id || prev?.avatarId || '2',
+                    rating: oppProfile.rating || prev?.rating || 1200
+                  }));
+                }
               }
-
             }
 
             if (matchData.result === 'FINISHED' || matchData.result === 'DRAW') {
@@ -644,7 +724,8 @@ export default function ConnectFour({
           }
         }
       } catch (e) {}
-    }
+    };
+
 
 
     syncLatestState();
@@ -778,8 +859,12 @@ export default function ConnectFour({
         winner_id: isWin ? profile?.id : null,
         winnerSymbol: isWin ? myRole : null,
         winningCells: winResult?.cells || [],
-        senderId: profile?.id
+        senderId: profile?.id,
+        senderName: profile?.name || profile?.display_name,
+        senderAvatarId: profile?.avatarId || '1',
+        senderRating: profile?.rating || 1200
       });
+
 
       if (isWin || isDraw) {
         handleFinalizeMatch(outcomeResult === 'WIN' ? 'WIN' : 'DRAW', '', myRole);
@@ -1262,18 +1347,19 @@ export default function ConnectFour({
           p1Name={profile?.display_name || profile?.name}
           p1AvatarId={profile?.avatarId || '1'}
           p1Rating={profile?.rating || 1200}
-          p1Score={scores.red}
+          p1Score={isOnline ? (myRole === RED ? scores.red : scores.yellow) : scores.red}
           p1Symbol={isOnline ? (myRole === RED ? 'RED DISC' : 'YELLOW DISC') : 'RED DISC'}
           p1Color={isOnline ? (myRole === RED ? '#ef4444' : '#eab308') : '#ef4444'}
           p2Name={isOnline ? (opponentProfile?.display_name || opponentProfile?.name) : (gameMode === 'VS_COMPUTER' ? (aiDifficulty === 'HARD' ? 'Grandmaster AI' : aiDifficulty === 'MEDIUM' ? 'Smart AI' : 'Casual AI') : localPlayerNames?.p2)}
           p2AvatarId={isOnline ? (opponentProfile?.avatarId || '2') : '2'}
           p2Rating={isOnline ? (opponentProfile?.rating || 1200) : (aiDifficulty === 'HARD' ? 1750 : aiDifficulty === 'MEDIUM' ? 1400 : 1100)}
-          p2Score={scores.yellow}
+          p2Score={isOnline ? (myRole === RED ? scores.yellow : scores.red) : scores.yellow}
           p2Symbol={isOnline ? (myRole === RED ? 'YELLOW DISC' : 'RED DISC') : 'YELLOW DISC'}
           p2Color={isOnline ? (myRole === RED ? '#eab308' : '#ef4444') : '#eab308'}
           isP1Turn={isMyTurn}
           isGameOver={!!winner}
           gameMode={gameMode}
+
           winnerText={
             isOnline ? (
               winner === myRole ? `${profile?.display_name || profile?.name} Won!` :

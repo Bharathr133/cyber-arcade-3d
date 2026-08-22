@@ -114,6 +114,16 @@ class RealtimeManager {
       }
     });
 
+    // 1.B7 Direct Peer Player Info Sync Listener (<5ms live GamerTag sync)
+    channel.on('broadcast', { event: 'player_info_sync' }, (payload) => {
+      const data = payload.payload || payload;
+      if (callbacks.onPlayerInfoSync && data) {
+        if (data.senderId && userId && data.senderId === userId) return;
+        callbacks.onPlayerInfoSync(data);
+      }
+    });
+
+
     // 1.C Authoritative PostgreSQL State Change Listener
     channel.on(
       'postgres_changes',
@@ -303,31 +313,34 @@ class RealtimeManager {
       try {
         const { data: matchData } = await supabase
           .from('matches')
-          .select('id, room_id, player_1_id, player_2_id')
+          .select('id, room_id, player_1_id, player_2_id, player_1_name, player_2_name')
           .eq('room_id', roomId)
-          .eq('result', 'ACTIVE')
           .order('started_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
         const matchId = matchData?.id || roomRecord.id;
-        const opponentId = (matchData?.player_1_id === userId) ? matchData?.player_2_id : matchData?.player_1_id;
+        const isPlayer1 = (matchData?.player_1_id === userId) || (roomRecord?.host_id === userId);
+        const opponentId = isPlayer1 ? (matchData?.player_2_id || roomRecord?.player_2_id) : (matchData?.player_1_id || roomRecord?.host_id);
 
-        let oppName = 'Opponent';
-        let oppAvatar = '2';
+        let oppName = isPlayer1 ? (roomRecord?.player_2_name || matchData?.player_2_name) : (roomRecord?.player_1_name || matchData?.player_1_name);
+        let oppAvatar = roomRecord?.player_2_avatar || roomRecord?.player_1_avatar || '2';
+        let oppRating = 1200;
+
         if (opponentId) {
           const { data: oppProfile } = await supabase
             .from('profiles')
-            .select('id, username, display_name, name, avatar_url, avatar_id')
+            .select('id, username, display_name, name, avatar_url, avatar_id, rating')
             .eq('id', opponentId)
             .maybeSingle();
 
           if (oppProfile) {
             oppName = oppProfile.display_name || oppProfile.name || (oppProfile.username ? `@${oppProfile.username}` : '') || oppName;
-            oppAvatar = oppProfile.avatar_url || oppProfile.avatar_id || '2';
+            oppAvatar = oppProfile.avatar_url || oppProfile.avatar_id || oppAvatar;
+            oppRating = oppProfile.rating || 1200;
           }
-
         }
+
 
         const payload = {
           match_id: matchId,

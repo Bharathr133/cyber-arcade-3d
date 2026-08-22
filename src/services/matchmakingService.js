@@ -144,9 +144,9 @@ class MatchmakingService {
         }
 
         if (!opponentName) {
-          const suffix = room.host_id ? room.host_id.replace(/\D/g, '').slice(-3) || '99' : '99';
-          opponentName = `Grandmaster_${suffix}`;
+          opponentName = room.player_1_name;
         }
+
 
         // Create match record
         const { data: matchData } = await supabase
@@ -358,9 +358,9 @@ class MatchmakingService {
       }
 
       if (!opponentName) {
-        const suffix = room.host_id ? room.host_id.replace(/\D/g, '').slice(-3) || '88' : '88';
-        opponentName = `Grandmaster_${suffix}`;
+        opponentName = room.player_1_name;
       }
+
 
       // Create Match Record
       const { data: matchData } = await supabase

@@ -96,7 +96,8 @@ export default async function handler(req, res) {
         await supabase.from('matches').insert({
           game_slug: lastMatch.gameKey,
           player_1_id: cleanId,
-          player_2_id: String(lastMatch.opponentName || 'Computer').substring(0, 50),
+          player_2_id: String(lastMatch.opponentName || '').substring(0, 50),
+
           result: ['WIN', 'LOSS', 'DRAW'].includes(lastMatch.outcome) ? lastMatch.outcome : 'WIN',
           duration_seconds: Math.min(7200, Math.max(0, Number(lastMatch.duration) || 60)),
           ended_at: new Date().toISOString()

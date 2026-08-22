@@ -38,7 +38,8 @@ export default async function handler(req, res) {
       p_user_id: userId,
       p_game_key: gameKey,
       p_outcome: outcome,
-      p_opponent_name: (opponentName || 'Computer').substring(0, 50)
+      p_opponent_name: (opponentName || '').substring(0, 50)
+
     });
 
     if (!rpcError && rpcData) {

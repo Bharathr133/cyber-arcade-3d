@@ -221,7 +221,8 @@ export function calculateEloDelta(playerRating, opponentRating = 1200, outcome =
   }
 }
 
-export function recordMatchResult(gameKey, outcome, opponentName = 'Computer', opponentRating = 1200) {
+export function recordMatchResult(gameKey, outcome, opponentName = '', opponentRating = 1200) {
+
   const normalizedKey = gameKey.toLowerCase().includes('gomoku') ? 'gomoku' :
                         gameKey.toLowerCase().includes('connect') ? 'connect4' :
                         gameKey.toLowerCase().includes('memory') ? 'memory' :

@@ -204,10 +204,6 @@ export default function OnlineMatchmakingModal({
             opponent: realOpponent
           };
 
-          setMatchLobbyData(lobby);
-          setStatus('READY_TO_START');
-          soundSynth.playVictory();
-
           // Broadcast instant player_joined event to Host
           realtimeManager.broadcastToRoom(roomId, 'player_joined', {
             match_id: matchId,
@@ -219,11 +215,8 @@ export default function OnlineMatchmakingModal({
             }
           });
 
-          realtimeManager.subscribeToRoom(roomId, currentUserProfile?.id, {
-            onGameStartRequested: () => {
-              triggerLaunchGame(lobby);
-            }
-          });
+          // Direct immediate launch into game board!
+          triggerLaunchGame(lobby);
 
         } else if (result?.status === 'WAITING' || result?.room) {
           const currentRoom = result.room || { id: result.room_id, roomCode: result.room_code };
@@ -251,26 +244,24 @@ export default function OnlineMatchmakingModal({
                 } catch (e) {}
               }
 
-
               const lobby = {
                 matchId: payload.match_id,
                 roomId: currentRoom.id,
                 myRole: 'X',
                 opponent: {
-                  name: oppName || 'Rival',
+                  name: oppName,
                   avatarId: opp.avatarId || '2',
                   rating: opp.rating || 1200
                 }
+
               };
-              setMatchLobbyData(lobby);
-              setStatus('READY_TO_START');
-              soundSynth.playVictory();
-            },
-            onGameStartRequested: () => {
-              triggerLaunchGame(matchLobbyDataRef.current);
+
+              // Direct immediate launch into game board!
+              triggerLaunchGame(lobby);
             }
           });
         }
+
  else if (result?.error) {
           setStatus('ERROR');
           const formatted = formatErrorMessage(result.error, 'Matchmaking');
@@ -306,7 +297,7 @@ export default function OnlineMatchmakingModal({
           realtimeManager.subscribeToRoom(currentRoom.id, currentUserProfile?.id, {
             onPlayerJoined: (payload) => {
               const opp = payload?.opponent || {};
-              const oppName = opp.name || opp.display_name || (opp.username ? `@${opp.username}` : 'Challenger');
+              const oppName = opp.name || opp.display_name || (opp.username ? `@${opp.username}` : '');
               const lobby = {
                 matchId: payload.match_id,
                 roomId: currentRoom.id,
@@ -317,14 +308,10 @@ export default function OnlineMatchmakingModal({
                   rating: opp.rating || 1200
                 }
               };
-              setMatchLobbyData(lobby);
-              setStatus('READY_TO_START');
-              soundSynth.playVictory();
-            },
-            onGameStartRequested: () => {
-              triggerLaunchGame(matchLobbyDataRef.current);
+              triggerLaunchGame(lobby);
             }
           });
+
         } else {
           setStatus('ERROR');
           setErrorMessage('Unable to generate private room code.');
@@ -388,7 +375,7 @@ export default function OnlineMatchmakingModal({
       if (result?.match_id || result?.matchId) {
         const matchId = result.match_id || result.matchId;
         const roomId = result.room_id || result.roomId;
-        const realOpponent = result.opponent || { name: 'Host Player', avatarId: '1', rating: 1200 };
+        const realOpponent = result.opponent || { name: '', avatarId: '1', rating: 1200 };
 
         const lobby = {
           matchId,
@@ -396,10 +383,6 @@ export default function OnlineMatchmakingModal({
           myRole: 'O',
           opponent: realOpponent
         };
-
-        setMatchLobbyData(lobby);
-        setStatus('READY_TO_START');
-        soundSynth.playVictory();
 
         realtimeManager.broadcastToRoom(roomId, 'player_joined', {
           match_id: matchId,
@@ -411,12 +394,9 @@ export default function OnlineMatchmakingModal({
           }
         });
 
-        realtimeManager.subscribeToRoom(roomId, currentUserProfile?.id, {
-          onGameStartRequested: () => {
-            triggerLaunchGame(lobby);
-          }
-        });
-      } else {
+        triggerLaunchGame(lobby);
+      }
+ else {
         setStatus('ERROR');
         const formatted = formatErrorMessage(result?.error || 'ROOM_NOT_FOUND', 'Join Room');
         setErrorMessage(formatted.message);
