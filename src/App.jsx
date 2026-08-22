@@ -230,9 +230,34 @@ function MainApp() {
   };
 
 
+  // Active Online Session State (Restored from sessionStorage on refresh)
+  const [activeOnlineSession, setActiveOnlineSession] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(ACTIVE_ONLINE_SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.matchId) {
+          // If session has timestamp, check if younger than 10 minutes
+          if (!parsed.timestamp || (Date.now() - parsed.timestamp < 600000)) {
+            return parsed;
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  });
+
   const initialRoute = getRouteFromUrl();
-  const [activeGameId, setActiveGameId] = useState(initialRoute.gameId);
-  const [activeGameMode, setActiveGameMode] = useState(getModeFromUrl);
+  const [activeGameId, setActiveGameId] = useState(() => {
+    if (activeOnlineSession?.gameId) return activeOnlineSession.gameId;
+    return initialRoute.gameId;
+  });
+  const [activeGameMode, setActiveGameMode] = useState(() => {
+    if (activeOnlineSession?.matchId) return 'ONLINE_MATCH';
+    return getModeFromUrl();
+  });
   const [activePage, setActivePage] = useState(initialRoute.page);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(initialRoute.page === 'settings');
@@ -253,13 +278,11 @@ function MainApp() {
     const prof = getUserProfile();
     const isGameRoute = initialRoute.gameId && initialRoute.gameId !== 'home';
     const isGuestWithoutName = (!prof?.hasCustomName || !prof?.name) && !prof?.email;
-    return Boolean(isGameRoute && isGuestWithoutName);
+    return Boolean(isGameRoute && isGuestWithoutName && !activeOnlineSession);
   });
   const pendingGuestActionRef = useRef(null);
 
-
   const [pendingAction, setPendingAction] = useState(null);
-
 
   const [localPlayersModal, setLocalPlayersModal] = useState({ isOpen: false, gameId: 'connect4', gameTitle: 'Connect 4' });
   const [localPlayerNames, setLocalPlayerNames] = useState(() => {
@@ -270,9 +293,6 @@ function MainApp() {
       return null;
     }
   });
-
-
-
 
   const [isVerifyingAuth, setIsVerifyingAuth] = useState(() => {
     try {
@@ -291,7 +311,6 @@ function MainApp() {
     }
   });
 
-
   // Online Matchmaking Modal State
   const [matchmakingModal, setMatchmakingModal] = useState({
     isOpen: false,
@@ -300,18 +319,9 @@ function MainApp() {
     gameTitle: 'Tic-Tac-Toe'
   });
 
-  // Active Online Session State (Restored from sessionStorage on refresh)
-  const [activeOnlineSession, setActiveOnlineSession] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem(ACTIVE_ONLINE_SESSION_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-
   // User Profile State
   const [profile, setProfile] = useState(() => getUserProfile());
+
 
   // Per-User Game Settings State (Strictly Isolated per User)
   const [settings, setSettings] = useState(() => getGameSettings(profile?.id));
@@ -433,6 +443,20 @@ function MainApp() {
       window.scrollTo(0, 0);
     }
   }, [activePage, activeGameId, activeGameMode]);
+
+  // Protect accidental page refresh / exit during active online matches
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (activeOnlineSession?.matchId && !isCurrentMatchFinished && activeGameMode === 'ONLINE_MATCH') {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [activeOnlineSession?.matchId, isCurrentMatchFinished, activeGameMode]);
+
 
   // Synchronize document title, meta tags, and OpenGraph with active route for Google SEO
   useEffect(() => {
@@ -593,15 +617,21 @@ function MainApp() {
 
   // Launch Online Match from Matchmaking Modal
   const handleLaunchOnlineGame = (sessionData) => {
-    setActiveOnlineSession(sessionData);
+    const gameId = sessionData?.gameId || matchmakingModal.gameId || activeGameId || 'connect4';
+    const enrichedSession = {
+      ...sessionData,
+      gameId,
+      timestamp: Date.now()
+    };
+    setActiveOnlineSession(enrichedSession);
     try {
-      sessionStorage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify(sessionData));
+      sessionStorage.setItem(ACTIVE_ONLINE_SESSION_KEY, JSON.stringify(enrichedSession));
     } catch (e) {}
 
-    const gameId = matchmakingModal.gameId;
     setMatchmakingModal(prev => ({ ...prev, isOpen: false }));
     executeNavigate(gameId, 'ONLINE_MATCH');
   };
+
 
 
 

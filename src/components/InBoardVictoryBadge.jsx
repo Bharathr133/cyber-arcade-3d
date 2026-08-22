@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Crown, Zap } from 'lucide-react';
+import { Trophy, Crown, Zap, ShieldAlert, MinusCircle } from 'lucide-react';
 
 export default function InBoardVictoryBadge({
   winner,
@@ -7,79 +7,63 @@ export default function InBoardVictoryBadge({
   gameType = 'connect4', // 'connect4' | 'tictactoe' | 'gomoku'
   outcome = null // 'WIN' | 'LOSS' | 'DRAW'
 }) {
+
   if (!winner) return null;
 
   const isDraw = winner === 'DRAW' || outcome === 'DRAW';
-  let title = 'VICTORY!';
-  let winnerColor = '#FACC15';
-  let badgeGradient = 'linear-gradient(135deg, rgba(234, 179, 8, 0.95), rgba(161, 98, 7, 0.95))';
-  let borderColor = '#FEF08A';
-  let glowColor = 'rgba(234, 179, 8, 0.6)';
+  const isMyWin = outcome === 'WIN' || (myRole && (winner === myRole || (myRole === 1 && (winner === 1 || winner === 'RED' || winner === 'X')) || (myRole === 2 && (winner === 2 || winner === 'YELLOW' || winner === 'O'))));
+  const isMyLoss = outcome === 'LOSS' || (myRole && !isDraw && !isMyWin);
 
-  if (gameType === 'connect4') {
-    const isRed = winner === 1 || winner === '1' || winner === 'RED' || winner === 'X';
-    const isYellow = winner === 2 || winner === '2' || winner === 'YELLOW' || winner === 'O';
-    if (isDraw) {
-      title = 'MATCH DRAW!';
-      badgeGradient = 'linear-gradient(135deg, rgba(51, 65, 85, 0.95), rgba(15, 23, 42, 0.95))';
-      borderColor = '#94A3B8';
-      glowColor = 'rgba(148, 163, 184, 0.4)';
-    } else if (isRed) {
-      title = 'RED WINS!';
-      winnerColor = '#F87171';
-      badgeGradient = 'linear-gradient(135deg, #DC2626 0%, #991B1B 50%, #7F1D1D 100%)';
-      borderColor = '#FCA5A5';
-      glowColor = 'rgba(239, 68, 68, 0.7)';
-    } else if (isYellow) {
-      title = 'YELLOW WINS!';
-      winnerColor = '#FDE047';
-      badgeGradient = 'linear-gradient(135deg, #CA8A04 0%, #A16207 50%, #713F12 100%)';
-      borderColor = '#FEF08A';
-      glowColor = 'rgba(234, 179, 8, 0.7)';
-    }
-  } else if (gameType === 'tictactoe') {
-    const isX = winner === 'X' || winner === 1;
-    const isO = winner === 'O' || winner === 2;
-    if (isDraw) {
-      title = 'MATCH DRAW!';
-      badgeGradient = 'linear-gradient(135deg, rgba(51, 65, 85, 0.95), rgba(15, 23, 42, 0.95))';
-      borderColor = '#94A3B8';
-      glowColor = 'rgba(148, 163, 184, 0.4)';
-    } else if (isX) {
-      title = 'PLAYER X WINS!';
-      winnerColor = '#38BDF8';
-      badgeGradient = 'linear-gradient(135deg, #0284C7 0%, #0369A1 50%, #075985 100%)';
-      borderColor = '#7DD3FC';
-      glowColor = 'rgba(14, 165, 233, 0.7)';
-    } else if (isO) {
-      title = 'PLAYER O WINS!';
-      winnerColor = '#F472B6';
-      badgeGradient = 'linear-gradient(135deg, #DB2777 0%, #BE185D 50%, #9D174D 100%)';
-      borderColor = '#F9A8D4';
-      glowColor = 'rgba(236, 72, 153, 0.7)';
-    }
-  } else if (gameType === 'gomoku') {
-    const isBlack = winner === 1 || winner === '1' || winner === 'BLACK';
-    const isWhite = winner === 2 || winner === '2' || winner === 'WHITE';
-    if (isDraw) {
-      title = 'MATCH DRAW!';
-      badgeGradient = 'linear-gradient(135deg, rgba(51, 65, 85, 0.95), rgba(15, 23, 42, 0.95))';
-      borderColor = '#94A3B8';
-      glowColor = 'rgba(148, 163, 184, 0.4)';
-    } else if (isBlack) {
-      title = 'BLACK WINS!';
-      winnerColor = '#E2E8F0';
-      badgeGradient = 'linear-gradient(135deg, #18181B 0%, #09090B 50%, #000000 100%)';
-      borderColor = '#E2E8F0';
-      glowColor = 'rgba(255, 255, 255, 0.4)';
-    } else if (isWhite) {
-      title = 'WHITE WINS!';
-      winnerColor = '#18181B';
-      badgeGradient = 'linear-gradient(135deg, #FFFFFF 0%, #F1F5F9 50%, #CBD5E1 100%)';
-      borderColor = '#000000';
-      glowColor = 'rgba(0, 0, 0, 0.4)';
+  let title = 'YOU WON!';
+  let winnerColor = '#4ADE80';
+  let badgeGradient = 'linear-gradient(135deg, #16A34A 0%, #15803D 50%, #14532D 100%)';
+  let borderColor = '#86EFAC';
+  let glowColor = 'rgba(34, 197, 94, 0.7)';
+
+  if (isDraw) {
+    title = 'DRAW MATCH!';
+    winnerColor = '#E2E8F0';
+    badgeGradient = 'linear-gradient(135deg, rgba(51, 65, 85, 0.95), rgba(15, 23, 42, 0.95))';
+    borderColor = '#94A3B8';
+    glowColor = 'rgba(148, 163, 184, 0.4)';
+  } else if (isMyLoss) {
+    title = 'YOU LOST!';
+    winnerColor = '#F87171';
+    badgeGradient = 'linear-gradient(135deg, #DC2626 0%, #991B1B 50%, #7F1D1D 100%)';
+    borderColor = '#FCA5A5';
+    glowColor = 'rgba(239, 68, 68, 0.7)';
+  } else if (isMyWin) {
+    title = 'YOU WON!';
+    winnerColor = '#4ADE80';
+    badgeGradient = 'linear-gradient(135deg, #16A34A 0%, #15803D 50%, #14532D 100%)';
+    borderColor = '#86EFAC';
+    glowColor = 'rgba(34, 197, 94, 0.7)';
+  } else {
+    // Local Pass & Play Fallbacks
+    if (gameType === 'connect4') {
+      const isRed = winner === 1 || winner === '1' || winner === 'RED' || winner === 'X';
+      title = isRed ? 'RED WINS!' : 'YELLOW WINS!';
+      winnerColor = isRed ? '#F87171' : '#FDE047';
+      badgeGradient = isRed ? 'linear-gradient(135deg, #DC2626 0%, #991B1B 50%, #7F1D1D 100%)' : 'linear-gradient(135deg, #CA8A04 0%, #A16207 50%, #713F12 100%)';
+      borderColor = isRed ? '#FCA5A5' : '#FEF08A';
+      glowColor = isRed ? 'rgba(239, 68, 68, 0.7)' : 'rgba(234, 179, 8, 0.7)';
+    } else if (gameType === 'tictactoe') {
+      const isX = winner === 'X' || winner === 1;
+      title = isX ? 'PLAYER X WINS!' : 'PLAYER O WINS!';
+      winnerColor = isX ? '#38BDF8' : '#F472B6';
+      badgeGradient = isX ? 'linear-gradient(135deg, #0284C7 0%, #0369A1 50%, #075985 100%)' : 'linear-gradient(135deg, #DB2777 0%, #BE185D 50%, #9D174D 100%)';
+      borderColor = isX ? '#7DD3FC' : '#F9A8D4';
+      glowColor = isX ? 'rgba(14, 165, 233, 0.7)' : 'rgba(236, 72, 153, 0.7)';
+    } else if (gameType === 'gomoku') {
+      const isBlack = winner === 1 || winner === '1' || winner === 'BLACK';
+      title = isBlack ? 'BLACK WINS!' : 'WHITE WINS!';
+      winnerColor = isBlack ? '#E2E8F0' : '#18181B';
+      badgeGradient = isBlack ? 'linear-gradient(135deg, #18181B 0%, #09090B 50%, #000000 100%)' : 'linear-gradient(135deg, #FFFFFF 0%, #F1F5F9 50%, #CBD5E1 100%)';
+      borderColor = isBlack ? '#E2E8F0' : '#000000';
+      glowColor = isBlack ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)';
     }
   }
+
 
   return (
     <div
@@ -131,7 +115,7 @@ export default function InBoardVictoryBadge({
           }}
         />
 
-        {/* Crown / Victory Header with Pulse Glow */}
+        {/* Crown / Shield Header with Pulse Glow */}
         <div
           style={{
             display: 'flex',
@@ -141,21 +125,60 @@ export default function InBoardVictoryBadge({
             filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))'
           }}
         >
-          <Crown size={20} color="#FEF08A" fill="#FACC15" />
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: '900',
-              letterSpacing: '0.18em',
-              color: '#FEF08A',
-              textTransform: 'uppercase',
-              fontFamily: 'var(--font-heading)'
-            }}
-          >
-            VICTORY
-          </span>
-          <Crown size={20} color="#FEF08A" fill="#FACC15" />
+          {isMyLoss ? (
+            <>
+              <ShieldAlert size={18} color="#FCA5A5" fill="#EF4444" />
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '900',
+                  letterSpacing: '0.18em',
+                  color: '#FCA5A5',
+                  textTransform: 'uppercase',
+                  fontFamily: 'var(--font-heading)'
+                }}
+              >
+                DEFEAT
+              </span>
+              <ShieldAlert size={18} color="#FCA5A5" fill="#EF4444" />
+            </>
+          ) : isDraw ? (
+            <>
+              <MinusCircle size={18} color="#CBD5E1" />
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '900',
+                  letterSpacing: '0.18em',
+                  color: '#CBD5E1',
+                  textTransform: 'uppercase',
+                  fontFamily: 'var(--font-heading)'
+                }}
+              >
+                MATCH TIED
+              </span>
+              <MinusCircle size={18} color="#CBD5E1" />
+            </>
+          ) : (
+            <>
+              <Crown size={20} color="#FEF08A" fill="#FACC15" />
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '900',
+                  letterSpacing: '0.18em',
+                  color: '#FEF08A',
+                  textTransform: 'uppercase',
+                  fontFamily: 'var(--font-heading)'
+                }}
+              >
+                VICTORY
+              </span>
+              <Crown size={20} color="#FEF08A" fill="#FACC15" />
+            </>
+          )}
         </div>
+
 
         {/* Winner Tag Text (e.g. "RED WINS!") */}
         <h2

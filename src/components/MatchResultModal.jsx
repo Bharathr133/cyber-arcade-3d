@@ -12,16 +12,73 @@ export default function MatchResultModal({
   gameTitle,
   opponentName = '',
   ratingDelta = 0,
-
   xpGained = 0,
   currentRating = 1200,
   level = 1,
   xp = 0,
   movesCount = 0,
   onRematch,
-  onGoHome
+  onGoHome,
+  isOnline = false,
+  rematchStatus = 'IDLE'
 }) {
   const [copied, setCopied] = useState(false);
+  const FINISH_KEY = 'arcade_match_finished_timestamp';
+
+  const [autoHomeSeconds, setAutoHomeSeconds] = useState(() => {
+    try {
+      const savedTime = sessionStorage.getItem(FINISH_KEY);
+      if (savedTime) {
+        const elapsed = Math.floor((Date.now() - parseInt(savedTime, 10)) / 1000);
+        return Math.max(0, 10 - elapsed);
+      }
+      return 10;
+    } catch (e) {
+      return 10;
+    }
+  });
+  const [isRematchRequested, setIsRematchRequested] = useState(false);
+
+  // 10-Second Auto-Return to Home with Exact Refresh Persistence
+  useEffect(() => {
+    if (!isOpen || !isOnline || isRematchRequested || rematchStatus === 'OFFERED' || rematchStatus === 'RECEIVED' || rematchStatus === 'ACCEPTED') {
+      return;
+    }
+
+    const savedTime = sessionStorage.getItem(FINISH_KEY);
+    let initialRemaining = 10;
+    if (savedTime) {
+      const elapsed = Math.floor((Date.now() - parseInt(savedTime, 10)) / 1000);
+      initialRemaining = Math.max(0, 10 - elapsed);
+    } else {
+      try { sessionStorage.setItem(FINISH_KEY, Date.now().toString()); } catch (e) {}
+    }
+
+    if (initialRemaining <= 0) {
+      try { sessionStorage.removeItem(FINISH_KEY); } catch (e) {}
+      if (onGoHome) onGoHome();
+      return;
+    }
+
+    setAutoHomeSeconds(initialRemaining);
+
+    const timer = setInterval(() => {
+      const currentSavedTime = sessionStorage.getItem(FINISH_KEY);
+      const elapsed = currentSavedTime ? Math.floor((Date.now() - parseInt(currentSavedTime, 10)) / 1000) : 0;
+      const remaining = Math.max(0, 10 - elapsed);
+
+      setAutoHomeSeconds(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(timer);
+        try { sessionStorage.removeItem(FINISH_KEY); } catch (e) {}
+        if (onGoHome) onGoHome();
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isOpen, isOnline, isRematchRequested, rematchStatus, onGoHome]);
+
 
   // Confetti explosion & lock background body scroll
   useEffect(() => {
@@ -44,6 +101,7 @@ export default function MatchResultModal({
       };
     }
   }, [isOpen, outcome]);
+
 
   if (!isOpen || !outcome) return null;
 
@@ -198,19 +256,52 @@ export default function MatchResultModal({
           margin: '0 0 6px 0',
           lineHeight: '1.1'
         }}>
-          {isWin ? 'VICTORY' : isLoss ? 'DEFEAT' : 'DRAW'}
+          {isWin ? 'YOU WON!' : isLoss ? 'YOU LOST!' : 'DRAW MATCH!'}
         </h2>
 
         <p style={{
           fontFamily: 'var(--font-body)',
           fontSize: '13px',
           color: '#64748b',
-          margin: '0 0 20px 0',
+          margin: '0 0 16px 0',
           lineHeight: 1.4
         }}>
           {opponentName ? `${gameTitle} match against ${opponentName} completed.` : `${gameTitle} match completed.`}
         </p>
 
+        {/* 10-Second Auto-Home Countdown Banner (Online Matches) */}
+        {isOnline && (
+          <div style={{
+            background: '#F0F9FF',
+            border: '1.5px solid #BAE6FD',
+            borderRadius: '12px',
+            padding: '8px 12px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            fontWeight: '800',
+            color: '#0369A1'
+          }}>
+            <span>Returning to Home in {autoHomeSeconds}s</span>
+            <button
+              onClick={onGoHome}
+              style={{
+                background: '#0284C7',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '4px 10px',
+                fontSize: '11px',
+                fontWeight: '800',
+                cursor: 'pointer'
+              }}
+            >
+              Go Now
+            </button>
+          </div>
+        )}
 
         {/* Rewards & Rating Card */}
         <div style={{
@@ -289,7 +380,10 @@ export default function MatchResultModal({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {/* Primary: Rematch / Play Again */}
           <button
-            onClick={onRematch}
+            onClick={() => {
+              setIsRematchRequested(true);
+              if (onRematch) onRematch();
+            }}
             className="btn-primary"
             style={{
               width: '100%',
@@ -307,8 +401,9 @@ export default function MatchResultModal({
             }}
           >
             <RotateCcw size={17} />
-            <span>PLAY AGAIN (REMATCH)</span>
+            <span>{isRematchRequested || rematchStatus === 'OFFERED' ? 'REMATCH OFFERED...' : 'PLAY AGAIN (REMATCH)'}</span>
           </button>
+
 
           {/* Secondary Actions Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

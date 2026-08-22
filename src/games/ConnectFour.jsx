@@ -374,14 +374,23 @@ export default function ConnectFour({
         const supabase = getSupabase();
         if (!supabase) return;
 
-        // Auto-update match record with our own real name if missing
+        // Auto-update match record with our own real name if missing & restore state
         const { data: match } = await supabase
           .from('matches')
-          .select('player_1_id, player_1_name, player_2_id, player_2_name')
+          .select('player_1_id, player_1_name, player_2_id, player_2_name, board_state, current_turn, status')
           .eq('id', matchId)
           .single();
 
         if (match) {
+          // Reconnect Board State Restoration
+          if (match.board_state && Array.isArray(match.board_state) && match.board_state.length === ROWS) {
+            setBoard(match.board_state);
+            if (match.current_turn) {
+              const nextTurn = (match.current_turn === 'X' || match.current_turn === 'RED' || match.current_turn === 'P1') ? RED : YELLOW;
+              setCurrentPlayer(nextTurn);
+            }
+          }
+
           const isPlayer1 = match.player_1_id === profile?.id;
           const oppName = isPlayer1 ? match.player_2_name : match.player_1_name;
           const oppId = isPlayer1 ? match.player_2_id : match.player_1_id;
@@ -389,6 +398,7 @@ export default function ConnectFour({
           if (oppName && oppName !== 'Opponent' && !oppName.startsWith('Player')) {
             setOpponentProfile(prev => ({ ...prev, name: oppName, id: oppId }));
           }
+
 
           if (oppId) {
             const { data: oppProf } = await supabase
@@ -1362,15 +1372,16 @@ export default function ConnectFour({
 
           winnerText={
             isOnline ? (
-              winner === myRole ? `${profile?.display_name || profile?.name} Won!` :
-              winner && winner !== 'DRAW' ? `${opponentProfile?.display_name || opponentProfile?.name} Won!` :
-              winner === 'DRAW' ? 'Draw Match!' : null
+              winner === myRole ? 'YOU WON!' :
+              winner && winner !== 'DRAW' ? 'YOU LOST!' :
+              winner === 'DRAW' ? 'DRAW MATCH!' : null
             ) : (
-              winner === RED ? `${gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name} Won!` :
+              winner === RED ? (gameMode === 'LOCAL_2P' ? `${localPlayerNames?.p1 || profile?.name} Won!` : 'YOU WON!') :
               winner === YELLOW ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${localPlayerNames?.p2} Won!`) :
-              winner === 'DRAW' ? 'Draw Match!' : null
+              winner === 'DRAW' ? 'DRAW MATCH!' : null
             )
           }
+
           timeLeft={timeLeft}
         />
 

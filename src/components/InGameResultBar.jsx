@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Trophy, ShieldAlert, MinusCircle, RotateCcw, Home, Zap, 
-  TrendingUp, TrendingDown, Check, X, UserX, Loader2 
+  TrendingUp, TrendingDown, Check, X, UserX, Loader2, Clock 
 } from 'lucide-react';
-
 
 export default function InGameResultBar({
   outcome, // 'WIN', 'LOSS', 'DRAW'
@@ -17,6 +16,62 @@ export default function InGameResultBar({
   rematchStatus = 'IDLE', // 'IDLE' | 'OFFERED' | 'RECEIVED' | 'ACCEPTED' | 'DECLINED' | 'OPPONENT_LEFT'
   opponentName = ''
 }) {
+  const FINISH_KEY = 'arcade_match_finished_timestamp';
+
+  const [autoHomeSeconds, setAutoHomeSeconds] = useState(() => {
+    try {
+      const savedTime = sessionStorage.getItem(FINISH_KEY);
+      if (savedTime) {
+        const elapsed = Math.floor((Date.now() - parseInt(savedTime, 10)) / 1000);
+        return Math.max(0, 10 - elapsed);
+      }
+      sessionStorage.setItem(FINISH_KEY, Date.now().toString());
+      return 10;
+    } catch (e) {
+      return 10;
+    }
+  });
+
+  // 10-Second Auto-Return Countdown with Exact Refresh Persistence
+  useEffect(() => {
+    if (!isOnline || rematchStatus === 'OFFERED' || rematchStatus === 'RECEIVED' || rematchStatus === 'ACCEPTED') {
+      return;
+    }
+
+    const savedTime = sessionStorage.getItem(FINISH_KEY);
+    let initialRemaining = 10;
+    if (savedTime) {
+      const elapsed = Math.floor((Date.now() - parseInt(savedTime, 10)) / 1000);
+      initialRemaining = Math.max(0, 10 - elapsed);
+    } else {
+      try { sessionStorage.setItem(FINISH_KEY, Date.now().toString()); } catch (e) {}
+    }
+
+    if (initialRemaining <= 0) {
+      try { sessionStorage.removeItem(FINISH_KEY); } catch (e) {}
+      if (onGoHome) onGoHome();
+      return;
+    }
+
+    setAutoHomeSeconds(initialRemaining);
+
+    const timer = setInterval(() => {
+      const currentSavedTime = sessionStorage.getItem(FINISH_KEY);
+      const elapsed = currentSavedTime ? Math.floor((Date.now() - parseInt(currentSavedTime, 10)) / 1000) : 0;
+      const remaining = Math.max(0, 10 - elapsed);
+
+      setAutoHomeSeconds(remaining);
+
+      if (remaining <= 0) {
+        clearInterval(timer);
+        try { sessionStorage.removeItem(FINISH_KEY); } catch (e) {}
+        if (onGoHome) onGoHome();
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isOnline, rematchStatus, onGoHome]);
+
 
   if (!outcome) return null;
 
@@ -31,7 +86,7 @@ export default function InGameResultBar({
         shadow: '0 8px 24px -4px rgba(16, 185, 129, 0.25)',
         badgeBg: '#10B981',
         badgeColor: '#FFFFFF',
-        title: 'VICTORY',
+        title: 'YOU WON!',
         textColor: '#065F46',
         icon: <Trophy size={18} color="#FFFFFF" />
       }
@@ -42,7 +97,7 @@ export default function InGameResultBar({
         shadow: '0 8px 24px -4px rgba(239, 68, 68, 0.25)',
         badgeBg: '#EF4444',
         badgeColor: '#FFFFFF',
-        title: 'DEFEAT',
+        title: 'YOU LOST!',
         textColor: '#991B1B',
         icon: <ShieldAlert size={18} color="#FFFFFF" />
       }
@@ -52,7 +107,7 @@ export default function InGameResultBar({
         shadow: '0 8px 24px -4px rgba(148, 163, 184, 0.25)',
         badgeBg: '#64748B',
         badgeColor: '#FFFFFF',
-        title: 'MATCH DRAW',
+        title: 'DRAW MATCH!',
         textColor: '#334155',
         icon: <MinusCircle size={18} color="#FFFFFF" />
       };
@@ -142,10 +197,10 @@ export default function InGameResultBar({
                 +{xpGained} XP
               </span>
             )}
-
           </div>
         </div>
       </div>
+
 
       {/* 2. Interactive Rematch & Action Controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -300,6 +355,29 @@ export default function InGameResultBar({
           )
         )}
 
+        {/* Auto-Return Countdown Pill for Online Matches */}
+        {isOnline && (rematchStatus === 'IDLE' || rematchStatus === 'DECLINED' || rematchStatus === 'OPPONENT_LEFT') && (
+
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '8px',
+              background: '#FFFFFF',
+              border: '1.5px solid #CBD5E1',
+              color: '#0F172A',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              fontWeight: '800'
+            }}
+          >
+            <Clock size={13} color="#2563EB" />
+            <span>Leaving in {autoHomeSeconds}s</span>
+          </div>
+        )}
+
         {/* Lobby / Home Button */}
         {onGoHome && (
           <button
@@ -325,6 +403,7 @@ export default function InGameResultBar({
           </button>
         )}
       </div>
+
     </div>
   );
 }

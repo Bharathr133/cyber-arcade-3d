@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Bot, MinusCircle, Clock } from 'lucide-react';
+import { Trophy, Bot, MinusCircle, Clock, ShieldAlert } from 'lucide-react';
 import { AVATARS } from '../utils/userProfile.js';
 
 export default function MatchPlayerBar({
@@ -28,6 +28,9 @@ export default function MatchPlayerBar({
   const isVsAi = gameMode === 'VS_COMPUTER';
   const isUrgent = timeLeft <= 5 && !isGameOver;
 
+  const isLossBanner = winnerText && (winnerText.includes('LOST') || winnerText.includes('DEFEAT'));
+  const isWinBanner = winnerText && (winnerText.includes('WIN') || winnerText.includes('WON') || winnerText.includes('VICTORY'));
+
   return (
     <div style={{
       width: '100%',
@@ -39,9 +42,9 @@ export default function MatchPlayerBar({
       {/* Winner Notification Banner */}
       {isGameOver && winnerText && (
         <div className="animate-pop-in" style={{
-          background: winnerText.includes('WIN') ? '#F0FDF4' : '#F4F4F5',
-          border: winnerText.includes('WIN') ? '1px solid #BBF7D0' : '1px solid #E4E4E7',
-          color: winnerText.includes('WIN') ? '#16A34A' : '#18181B',
+          background: isLossBanner ? '#FEF2F2' : isWinBanner ? '#F0FDF4' : '#F4F4F5',
+          border: isLossBanner ? '1.5px solid #FECACA' : isWinBanner ? '1.5px solid #BBF7D0' : '1px solid #E4E4E7',
+          color: isLossBanner ? '#DC2626' : isWinBanner ? '#16A34A' : '#18181B',
           borderRadius: '10px',
           padding: '6px 12px',
           display: 'flex',
@@ -50,12 +53,13 @@ export default function MatchPlayerBar({
           gap: '6px',
           fontFamily: 'var(--font-heading)',
           fontSize: '12px',
-          fontWeight: '700'
+          fontWeight: '800'
         }}>
-          {winnerText.includes('WIN') ? <Trophy size={14} color="#16A34A" /> : <MinusCircle size={14} color="#71717A" />}
+          {isLossBanner ? <ShieldAlert size={14} color="#DC2626" /> : isWinBanner ? <Trophy size={14} color="#16A34A" /> : <MinusCircle size={14} color="#71717A" />}
           <span>{winnerText}</span>
         </div>
       )}
+
 
       {/* Dual Player Card Layout */}
       <div style={{

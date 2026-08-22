@@ -21,6 +21,11 @@ const BLACK = 1; // Player 1 (Host / Black)
 const WHITE = 2; // Player 2 (Guest / White)
 const COORD_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O', 'P'];
 
+const normalizeGomokuRole = (role) => {
+  if (role === 2 || role === '2' || role === 'O' || role === 'WHITE' || role === 'P2' || role === 'GUEST') return WHITE;
+  return BLACK;
+};
+
 const DEFAULT_GOMOKU_STATE = {
   board: Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY)),
   currentPlayer: BLACK,
@@ -43,14 +48,12 @@ export default function GomokuGame({
   const isOnline = initialMode === 'ONLINE_MATCH' && !!onlineSession?.matchId;
   const turnTimeLimit = settings?.turnTimeLimit !== undefined ? settings.turnTimeLimit : 30;
 
-
   const [initialState] = useState(() => isOnline ? DEFAULT_GOMOKU_STATE : loadGameState('gomoku', DEFAULT_GOMOKU_STATE));
 
   const [board, setBoard] = useState(initialState.board);
-
   const [currentPlayer, setCurrentPlayer] = useState(initialState.currentPlayer);
   const [gameMode] = useState(isOnline ? 'ONLINE_MATCH' : initialMode);
-  const [myRole, setMyRole] = useState(onlineSession?.myRole === 'O' ? WHITE : BLACK);
+  const [myRole, setMyRole] = useState(() => normalizeGomokuRole(onlineSession?.myRole));
   const [winner, setWinner] = useState(initialState.winner);
   const [winningStones, setWinningStones] = useState(initialState.winningStones || []);
   const [history, setHistory] = useState(initialState.history || []);
@@ -58,6 +61,7 @@ export default function GomokuGame({
   const [showMoveNumbers, setShowMoveNumbers] = useState(false);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [isSubmittingMove, setIsSubmittingMove] = useState(false);
+
   const [connectionStatus, setConnectionStatus] = useState('CONNECTED');
   const [disconnectCountdown, setDisconnectCountdown] = useState(null);
 
@@ -196,7 +200,7 @@ export default function GomokuGame({
   useEffect(() => {
     if (!isOnline || !onlineSession?.matchId) return;
 
-    setMyRole(onlineSession.myRole === 'O' ? WHITE : BLACK);
+    setMyRole(normalizeGomokuRole(onlineSession.myRole));
     if (onlineSession.opponent?.name) {
       setOpponentProfile(onlineSession.opponent);
     }
@@ -211,18 +215,31 @@ export default function GomokuGame({
 
         const { data: match } = await supabase
           .from('matches')
-          .select('player_1_id, player_1_name, player_2_id, player_2_name')
+          .select('player_1_id, player_1_name, player_2_id, player_2_name, board_state, current_turn, status')
           .eq('id', matchId)
           .single();
 
         if (match) {
           const isPlayer1 = match.player_1_id === profile?.id;
+          setMyRole(isPlayer1 ? BLACK : WHITE);
+
+          // Reconnect Board State Restoration
+          if (match.board_state && Array.isArray(match.board_state) && match.board_state.length === BOARD_SIZE) {
+            setBoard(match.board_state);
+            if (match.current_turn !== undefined && match.current_turn !== null) {
+              const nextTurn = (match.current_turn === 1 || match.current_turn === '1' || match.current_turn === 'X' || match.current_turn === 'BLACK' || match.current_turn === 'P1' || match.current_turn === 'RED') ? BLACK : WHITE;
+              setCurrentPlayer(nextTurn);
+            }
+          }
+
           const oppName = isPlayer1 ? match.player_2_name : match.player_1_name;
           const oppId = isPlayer1 ? match.player_2_id : match.player_1_id;
 
           if (oppName && oppName !== 'Opponent' && !oppName.startsWith('Player')) {
             setOpponentProfile(prev => ({ ...prev, name: oppName, id: oppId }));
           }
+
+
 
           if (oppId) {
             const { data: oppProf } = await supabase
@@ -371,8 +388,8 @@ export default function GomokuGame({
 
         const incomingBoard = serverState.board_state || serverState.board;
 
-        const rawTurn = serverState.current_turn || serverState.turn;
-        const incomingTurn = (rawTurn === 'X' || rawTurn === 'BLACK' || rawTurn === 'P1') ? BLACK : WHITE;
+        const rawTurn = serverState.current_turn !== undefined ? serverState.current_turn : serverState.turn;
+        const incomingTurn = (rawTurn === 1 || rawTurn === '1' || rawTurn === 'X' || rawTurn === 'BLACK' || rawTurn === 'P1' || rawTurn === 'RED') ? BLACK : WHITE;
         const incomingResult = serverState.status || serverState.result;
         const winnerId = serverState.winner_id || serverState.winnerId;
 
@@ -386,6 +403,8 @@ export default function GomokuGame({
 
           setBoard(finalBoard);
           setCurrentPlayer(incomingTurn);
+          setIsSubmittingMove(false);
+          soundSynth.playRotate();
 
           const winResult = scanBoardForWinner(finalBoard);
           if (winResult?.stones && winResult.stones.length > 0) {
@@ -408,6 +427,7 @@ export default function GomokuGame({
           }
         }
       },
+
 
       onOpponentDisconnect: () => {
         if (disconnectIntervalRef.current) clearInterval(disconnectIntervalRef.current);
@@ -701,8 +721,11 @@ export default function GomokuGame({
           if (Array.isArray(finalBoard) && finalBoard.length === BOARD_SIZE) {
             setBoard(finalBoard);
           }
-          const rawTurn = res.state.turn || res.state.current_turn;
-          setCurrentPlayer((rawTurn === 'X' || rawTurn === 'BLACK' || rawTurn === 'P1') ? BLACK : WHITE);
+          const rawTurn = res.state.current_turn !== undefined ? res.state.current_turn : res.state.turn;
+          if (rawTurn !== undefined && rawTurn !== null) {
+            setCurrentPlayer((rawTurn === 1 || rawTurn === '1' || rawTurn === 'X' || rawTurn === 'BLACK' || rawTurn === 'P1' || rawTurn === 'RED') ? BLACK : WHITE);
+          }
+
 
           if (res.state.result && res.state.result !== 'ACTIVE') {
             const isWinMatch = res.state.result === 'WIN' || res.state.result === 'FINISHED';
@@ -1012,15 +1035,16 @@ export default function GomokuGame({
 
         winnerText={
           isOnline ? (
-            winner === myRole ? `${profile?.display_name || profile?.name} Won!` :
-            winner && winner !== 'DRAW' ? `${opponentProfile?.display_name || opponentProfile?.name} Won!` :
-            winner === 'DRAW' ? 'Draw Match!' : null
+            winner === myRole ? 'YOU WON!' :
+            winner && winner !== 'DRAW' ? 'YOU LOST!' :
+            winner === 'DRAW' ? 'DRAW MATCH!' : null
           ) : (
-            winner === BLACK ? `${gameMode === 'LOCAL_2P' ? (localPlayerNames?.p1 || profile?.name) : profile?.name} Won!` :
+            winner === BLACK ? (gameMode === 'LOCAL_2P' ? `${localPlayerNames?.p1 || profile?.name} Won!` : 'YOU WON!') :
             winner === WHITE ? (gameMode === 'VS_COMPUTER' ? 'AI Bot Won!' : `${localPlayerNames?.p2} Won!`) :
-            winner === 'DRAW' ? 'Draw Match!' : null
+            winner === 'DRAW' ? 'DRAW MATCH!' : null
           )
         }
+
         timeLeft={timeLeft}
       />
 
