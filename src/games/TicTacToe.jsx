@@ -49,7 +49,17 @@ export default function TicTacToe({
   const [winningLine, setWinningLine] = useState(initialState.winningLine || []);
   const [scores, setScores] = useState(initialState.scores || { x: 0, o: 0, draws: 0 });
   const [history, setHistory] = useState(initialState.history || []);
+  const [aiDifficulty, setAiDifficulty] = useState(() => settings?.aiDifficulty || 'EASY');
+
+  // Synchronize when settings change from Match Settings Modal
+  useEffect(() => {
+    if (settings?.aiDifficulty) {
+      setAiDifficulty(settings.aiDifficulty);
+    }
+  }, [settings?.aiDifficulty]);
+
   const [isAiThinking, setIsAiThinking] = useState(false);
+
   const [isSubmittingMove, setIsSubmittingMove] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('CONNECTED');
   const [disconnectCountdown, setDisconnectCountdown] = useState(null);
@@ -713,17 +723,21 @@ export default function TicTacToe({
     }
   };
 
-  // Unbeatable Minimax AI Handler
+  // 3-Tier AI Handler (EASY, MEDIUM, HARD Minimax)
   useEffect(() => {
     if (gameMode === 'VS_COMPUTER' && !isXNext && !winner) {
       setIsAiThinking(true);
 
+      const delay = aiDifficulty === 'HARD' ? 350 : 250;
       aiTimeoutRef.current = setTimeout(() => {
         setIsAiThinking(false);
         const curBoard = boardRef.current;
         if (winnerRef.current) return;
 
-        // Minimax with alpha-beta pruning
+        const emptyIndices = curBoard.map((c, i) => c === null ? i : null).filter(i => i !== null);
+        if (emptyIndices.length === 0) return;
+
+        // Check winner helper
         const checkResult = (b) => {
           const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
           for (const [a,c,d] of lines) {
@@ -733,6 +747,70 @@ export default function TicTacToe({
           return null;
         };
 
+        // 1. EASY AI (40% Random, 60% Basic Attack/Block)
+        if (aiDifficulty === 'EASY') {
+          if (Math.random() < 0.4) {
+            const randomMove = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+            applyLocalMove(randomMove, 'O');
+            return;
+          }
+          // Check for instant win
+          for (let idx of emptyIndices) {
+            curBoard[idx] = 'O';
+            if (checkResult(curBoard) === 'O') {
+              curBoard[idx] = null;
+              applyLocalMove(idx, 'O');
+              return;
+            }
+            curBoard[idx] = null;
+          }
+          // Otherwise random
+          const chosen = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+          applyLocalMove(chosen, 'O');
+          return;
+        }
+
+        // 2. MEDIUM AI (Tactical: Wins immediately, blocks 80% threats, takes center/corners)
+        if (aiDifficulty === 'MEDIUM') {
+          // Instant Win
+          for (let idx of emptyIndices) {
+            curBoard[idx] = 'O';
+            if (checkResult(curBoard) === 'O') {
+              curBoard[idx] = null;
+              applyLocalMove(idx, 'O');
+              return;
+            }
+            curBoard[idx] = null;
+          }
+          // Block Player 1 Win (80% rate)
+          if (Math.random() < 0.8) {
+            for (let idx of emptyIndices) {
+              curBoard[idx] = 'X';
+              if (checkResult(curBoard) === 'X') {
+                curBoard[idx] = null;
+                applyLocalMove(idx, 'O');
+                return;
+              }
+              curBoard[idx] = null;
+            }
+          }
+          // Center preference
+          if (curBoard[4] === null) {
+            applyLocalMove(4, 'O');
+            return;
+          }
+          // Corner preference
+          const corners = [0, 2, 6, 8].filter(i => curBoard[i] === null);
+          if (corners.length > 0) {
+            applyLocalMove(corners[Math.floor(Math.random() * corners.length)], 'O');
+            return;
+          }
+          const chosen = emptyIndices[Math.floor(Math.random() * emptyIndices.length)];
+          applyLocalMove(chosen, 'O');
+          return;
+        }
+
+        // 3. HARD AI (Unbeatable Minimax with Alpha-Beta Pruning)
         const minimax = (b, depth, isMax) => {
           const res = checkResult(b);
           if (res === 'O') return 10 - depth;
@@ -755,7 +833,7 @@ export default function TicTacToe({
         };
 
         let bestScore = -Infinity;
-        let bestMove = -1;
+        let bestMove = emptyIndices[0];
         for (let i = 0; i < 9; i++) {
           if (!curBoard[i]) {
             curBoard[i] = 'O';
@@ -768,16 +846,15 @@ export default function TicTacToe({
           }
         }
 
-        if (bestMove !== -1) {
-          applyLocalMove(bestMove, 'O');
-        }
-      }, 300);
+        applyLocalMove(bestMove, 'O');
+      }, delay);
 
       return () => {
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
       };
     }
-  }, [isXNext, gameMode, winner, applyLocalMove]);
+  }, [isXNext, gameMode, winner, aiDifficulty, applyLocalMove]);
+
 
   // Active Turn Countdown Timer with Monotonic Timestamps
   useEffect(() => {

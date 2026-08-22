@@ -63,10 +63,7 @@ export default function DesktopAppSidebar({
 }) {
   const [localExpanded, setLocalExpanded] = useState(true);
   const isExpanded = controlledExpanded !== undefined ? controlledExpanded : localExpanded;
-  const [quickJoinCode, setQuickJoinCode] = useState('');
-  const [joinSelectedGame, setJoinSelectedGame] = useState('connect4');
   const [expandedGameId, setExpandedGameId] = useState(null);
-
 
   const totalMatches = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
   const tier = getTier(profile?.rating || 1200, totalMatches);
@@ -85,14 +82,8 @@ export default function DesktopAppSidebar({
     { id: 'ludo', title: 'Ludo', tag: '2-4 PLAYERS', badge: 'CLASSIC', icon: LudoIcon }
   ];
 
-  const handleDirectJoinSubmit = (e) => {
-    e.preventDefault();
-    if (!quickJoinCode.trim()) return;
-    soundSynth.playVictory();
-    onJoinPrivateRoom(joinSelectedGame, quickJoinCode.trim().toUpperCase());
-  };
-
   const toggleSidebar = () => {
+
     soundSynth.playRotate();
     if (onToggleExpand) {
       onToggleExpand();
@@ -534,89 +525,11 @@ export default function DesktopAppSidebar({
         </div>
       </div>
 
-      {/* 3. BOTTOM SECTION: Private Room Quick Join */}
+      {/* 3. BOTTOM SECTION: Footer */}
       <div style={{ paddingTop: '8px', borderTop: '1px solid #E4E4E7', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
-        {isExpanded ? (
-          <div style={{ background: '#FFFFFF', border: '1px solid #E4E4E7', borderRadius: '10px', padding: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <KeyRound size={12} color="#2563EB" />
-                <span style={{ fontSize: '10px', fontWeight: '800', color: '#18181B' }}>
-                  PRIVATE ROOM
-                </span>
-              </div>
-
-              {/* Game Selector Pills */}
-              <div style={{ display: 'flex', gap: '2px' }}>
-                {['connect4', 'tictactoe', 'gomoku', 'memory', 'ludo'].map((gKey) => (
-                  <button
-                    key={gKey}
-                    type="button"
-                    onClick={() => setJoinSelectedGame(gKey)}
-                    style={{
-                      padding: '1px 3px', borderRadius: '3px', fontSize: '8px', fontWeight: '700',
-                      border: 'none',
-                      background: joinSelectedGame === gKey ? '#2563EB' : '#F4F4F5',
-                      color: joinSelectedGame === gKey ? '#FFFFFF' : '#71717A',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {gKey === 'connect4' ? 'C4' : gKey === 'tictactoe' ? 'TTT' : gKey === 'gomoku' ? 'GMK' : gKey === 'memory' ? 'MEM' : 'LUD'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <form onSubmit={handleDirectJoinSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <input
-                type="text"
-                maxLength={6}
-                value={quickJoinCode}
-                onChange={(e) => setQuickJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                placeholder="6-LETTER CODE"
-
-                style={{
-                  width: '100%', padding: '6px', borderRadius: '6px',
-                  border: '1px solid #E4E4E7', fontSize: '11px', fontWeight: '700',
-                  letterSpacing: '2px', textAlign: 'center', fontFamily: 'var(--font-mono)',
-                  outline: 'none', background: '#FAFAFA', color: '#18181B', boxSizing: 'border-box'
-                }}
-              />
-
-              <button
-                type="submit"
-                disabled={quickJoinCode.trim().length < 4}
-                className="btn-primary"
-                style={{
-                  padding: '6px', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
-                  opacity: quickJoinCode.trim().length >= 4 ? 1 : 0.4
-                }}
-              >
-                <span>JOIN ROOM</span>
-                <ArrowRight size={11} />
-              </button>
-            </form>
-          </div>
-        ) : (
-          <div className="sidebar-item-wrapper">
-            <button
-              onClick={() => onJoinPrivateRoom('connect4')}
-              style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                background: '#FFFFFF', border: '1px solid #E4E4E7',
-                color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', margin: '0 auto'
-              }}
-            >
-              <KeyRound size={15} />
-            </button>
-            <FlyoutTooltip title="Private Room" subtitle="Enter match code" badge="CUSTOM" />
-          </div>
-        )}
-
-        {/* Real-time Status */}
+        {/* Real-time Anti-Cheat Engine Status */}
         {isExpanded && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '9px', color: '#71717A', fontFamily: 'var(--font-mono)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '9px', color: '#71717A', fontFamily: 'var(--font-mono)', padding: '2px 4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <ShieldCheck size={11} color="#16A34A" />
               <span>Anti-Cheat Engine</span>

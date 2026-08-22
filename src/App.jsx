@@ -49,11 +49,17 @@ import { getUserProfile, recordMatchResult, logoutUserProfile } from './utils/us
 import { authService } from './services/authService.js';
 
 
-import { getGameSettings } from './utils/gameSettings.js';
+import { 
+  getGameSettings, 
+  getPerGameSettings, 
+  recordAiWinAndUnlock, 
+  getUnlockedAiTiers 
+} from './utils/gameSettings.js';
 import { cloudSync } from './utils/cloudSync.js';
 import { presenceService } from './services/presenceService.js';
 import { realtimeManager } from './services/realtimeManager.js';
 import { matchmakingService } from './services/matchmakingService.js';
+
 
 const STATS_STORAGE_KEY = 'championship_arena_stats';
 const ACTIVE_ONLINE_SESSION_KEY = 'championship_active_online_session';
@@ -205,12 +211,17 @@ function MainApp() {
         return { gameId: 'home', page: pageParam };
       }
       if (joinParam) {
+        if (gameParam && ['gomoku', 'connect4', 'tictactoe', 'memory', 'ludo'].includes(gameParam)) {
+          return { gameId: gameParam, page: null };
+        }
         if (joinParam.includes('connect4')) return { gameId: 'connect4', page: null };
         if (joinParam.includes('tictactoe')) return { gameId: 'tictactoe', page: null };
         if (joinParam.includes('memory')) return { gameId: 'memory', page: null };
         if (joinParam.includes('ludo')) return { gameId: 'ludo', page: null };
-        return { gameId: 'gomoku', page: null };
+        if (joinParam.includes('gomoku')) return { gameId: 'gomoku', page: null };
+        return { gameId: 'connect4', page: null };
       }
+
 
     } catch (e) {}
     return { gameId: 'home', page: null };
@@ -325,15 +336,48 @@ function MainApp() {
   const [profile, setProfile] = useState(() => getUserProfile());
 
 
-  // Per-User Game Settings State (Strictly Isolated per User)
-  const [settings, setSettings] = useState(() => getGameSettings(profile?.id));
+  // Per-User Game Settings State (Strictly Isolated per Game and User)
+  const [settings, setSettings] = useState(() => {
+    const gId = (activeGameId && activeGameId !== 'home') ? activeGameId : 'connect4';
+    return getPerGameSettings(gId, profile?.id);
+  });
 
-  // Sync settings when active user changes
+  // Sync settings when active game or user changes
   useEffect(() => {
-    if (profile?.id) {
-      setSettings(getGameSettings(profile.id));
-    }
-  }, [profile?.id]);
+    const gId = (activeGameId && activeGameId !== 'home') ? activeGameId : 'connect4';
+    setSettings(getPerGameSettings(gId, profile?.id));
+  }, [activeGameId, profile?.id]);
+
+  // Synchronize dynamic refs for popstate and unload events
+  const activeGameIdRef = useRef(activeGameId);
+  activeGameIdRef.current = activeGameId;
+  const activeGameModeRef = useRef(activeGameMode);
+  activeGameModeRef.current = activeGameMode;
+  const isCurrentMatchFinishedRef = useRef(isCurrentMatchFinished);
+  isCurrentMatchFinishedRef.current = isCurrentMatchFinished;
+
+  // Browser Refresh & Tab Close Interceptor during Active Gameplay
+  useEffect(() => {
+    const isPlayingActiveMatch = Boolean(
+      activeGameId && 
+      activeGameId !== 'home' && 
+      activeGameMode !== 'LOBBY' && 
+      !isCurrentMatchFinished
+    );
+
+    if (!isPlayingActiveMatch) return;
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'You have an active match in progress. If you leave or refresh, your current game progress will be lost.';
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [activeGameId, activeGameMode, isCurrentMatchFinished]);
 
   // Lifetime Match Stats
   const [stats, setStats] = useState(() => {
@@ -344,6 +388,7 @@ function MainApp() {
       return DEFAULT_STATS;
     }
   });
+
 
   // Live Supabase Auth Session Listener with Verification Celebration
   useEffect(() => {
@@ -402,24 +447,48 @@ function MainApp() {
     try {
       const params = new URLSearchParams(window.location.search);
       const joinParam = params.get('join');
-      const gameParam = params.get('game') || 'tictactoe';
+      const gameParam = params.get('game') || 'connect4';
       if (joinParam && !activeOnlineSession) {
+        const titles = {
+          connect4: 'Connect 4',
+          tictactoe: 'Tic-Tac-Toe',
+          gomoku: 'Gomoku',
+          memory: 'Memory Match',
+          ludo: 'Ludo Championship'
+        };
         setMatchmakingModal({
           isOpen: true,
           mode: 'JOIN_PRIVATE',
           gameId: gameParam,
-          gameTitle: gameParam === 'connect4' ? 'Connect 4' : (gameParam === 'gomoku' ? 'Gomoku' : 'Tic-Tac-Toe')
+          gameTitle: titles[gameParam] || 'Private Match'
         });
       }
     } catch (e) {}
   }, []);
 
 
-  // Listen to browser Back / Forward buttons (popstate)
+
+  // Listen to browser Back / Forward buttons (popstate) with Active Match Protection
   useEffect(() => {
     const handlePopState = () => {
+      const isPlayingActiveMatch = Boolean(
+        activeGameIdRef.current && 
+        activeGameIdRef.current !== 'home' && 
+        activeGameModeRef.current !== 'LOBBY' && 
+        !isCurrentMatchFinishedRef.current
+      );
+
       const route = getRouteFromUrl();
       const mode = getModeFromUrl();
+
+      if (isPlayingActiveMatch) {
+        // Re-push current state to avoid accidental unconfirmed back navigation
+        window.history.pushState(null, '', `/${activeGameIdRef.current}`);
+        setPendingAction({ type: 'POPSTATE', route, mode });
+        setIsExitConfirmOpen(true);
+        return;
+      }
+
       setActiveGameId(route.gameId);
       setActiveGameMode(mode);
       setIsLeaderboardOpen(route.page === 'leaderboard');
@@ -432,6 +501,7 @@ function MainApp() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
 
   // Automatically scroll to the very top whenever navigating to any page or game
   useEffect(() => {
@@ -557,14 +627,22 @@ function MainApp() {
       }
     }
 
-    // If currently inside an active ongoing game (match NOT finished) and trying to exit or switch game, ask confirmation
-    if (activeGameId && activeGameId !== 'home' && gameId !== activeGameId && !isCurrentMatchFinished) {
+    // If currently inside an active ongoing game (match NOT finished) and trying to exit, return home, or switch mode/game, ask confirmation
+    const isPlayingActiveMatch = Boolean(
+      activeGameId && 
+      activeGameId !== 'home' && 
+      activeGameMode !== 'LOBBY' && 
+      !isCurrentMatchFinished
+    );
+
+    if (isPlayingActiveMatch && (gameId !== activeGameId || mode !== activeGameMode || gameId === 'home')) {
       setPendingAction({ type: 'NAVIGATE', gameId, mode });
       setIsExitConfirmOpen(true);
       return;
     }
     executeNavigate(gameId, mode);
   };
+
 
 
   const executeNavigate = (gameId, mode = 'LOBBY') => {
@@ -617,12 +695,13 @@ function MainApp() {
 
 
 
-  // Launch Online Match from Matchmaking Modal
+  // Launch Online Match from Matchmaking Modal (Auto-routes to Room's Actual Game)
   const handleLaunchOnlineGame = (sessionData) => {
-    const gameId = sessionData?.gameId || matchmakingModal.gameId || activeGameId || 'connect4';
+    const targetGameId = sessionData?.gameId || sessionData?.game_slug || matchmakingModal.gameId || activeGameId || 'connect4';
     const enrichedSession = {
       ...sessionData,
-      gameId,
+      gameId: targetGameId,
+      game_slug: targetGameId,
       timestamp: Date.now()
     };
     setActiveOnlineSession(enrichedSession);
@@ -631,8 +710,9 @@ function MainApp() {
     } catch (e) {}
 
     setMatchmakingModal(prev => ({ ...prev, isOpen: false }));
-    executeNavigate(gameId, 'ONLINE_MATCH');
+    executeNavigate(targetGameId, 'ONLINE_MATCH');
   };
+
 
 
 
@@ -762,10 +842,16 @@ function MainApp() {
         executeNavigate(pendingAction.gameId, pendingAction.mode);
       } else if (pendingAction.type === 'PAGE') {
         executeOpenPage(pendingAction.pageName);
+      } else if (pendingAction.type === 'POPSTATE') {
+        setActiveGameId(pendingAction.route.gameId);
+        setActiveGameMode(pendingAction.mode);
+        setIsLeaderboardOpen(pendingAction.route.page === 'leaderboard');
+        setIsSettingsOpen(pendingAction.route.page === 'rules' || pendingAction.route.page === 'settings');
+        setIsProfileOpen(pendingAction.route.page === 'profile');
       }
       setPendingAction(null);
     } else {
-      executeNavigate('home', 'VS_COMPUTER');
+      executeNavigate('home', 'LOBBY');
     }
   };
 
@@ -773,6 +859,7 @@ function MainApp() {
     setIsExitConfirmOpen(false);
     setPendingAction(null);
   };
+
 
   // Close modals / return to game lobby
   const handleCloseModals = () => {
@@ -848,6 +935,19 @@ function MainApp() {
         opponentName
       });
     }
+
+    // AI Progression Engine: Unlock higher difficulty tiers upon defeating AI Bot
+    if (activeGameMode === 'VS_COMPUTER' && outcome === 'WIN') {
+      const currentDiff = settings?.aiDifficulty || 'EASY';
+      const { newUnlock } = recordAiWinAndUnlock(gameKey, currentDiff, profile?.id);
+      if (newUnlock) {
+        soundSynth.playVictory();
+        const refreshedSettings = getPerGameSettings(gameKey, profile?.id);
+        setSettings(refreshedSettings);
+        alert.showSuccess(`🎉 Congratulations! You defeated ${currentDiff} AI and unlocked ${newUnlock} Difficulty!`);
+      }
+    }
+
 
     setStats((prev) => {
       const gameStats = prev[gameKey] || { p1Wins: 0, p2Wins: 0, draws: 0 };

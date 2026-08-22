@@ -59,7 +59,17 @@ export default function GomokuGame({
   const [history, setHistory] = useState(initialState.history || []);
   const [scores, setScores] = useState(initialState.scores || { black: 0, white: 0, draws: 0 });
   const [showMoveNumbers, setShowMoveNumbers] = useState(false);
+  const [aiDifficulty, setAiDifficulty] = useState(() => settings?.aiDifficulty || 'EASY');
+
+  // Synchronize when settings change from Match Settings Modal
+  useEffect(() => {
+    if (settings?.aiDifficulty) {
+      setAiDifficulty(settings.aiDifficulty);
+    }
+  }, [settings?.aiDifficulty]);
+
   const [isAiThinking, setIsAiThinking] = useState(false);
+
   const [isSubmittingMove, setIsSubmittingMove] = useState(false);
 
   const [connectionStatus, setConnectionStatus] = useState('CONNECTED');
@@ -770,34 +780,31 @@ export default function GomokuGame({
   };
 
 
-  // Smart Gomoku AI
+  // 3-Tier Tactical Gomoku AI (EASY, MEDIUM, HARD)
   useEffect(() => {
     if (gameMode === 'VS_COMPUTER' && currentPlayer === WHITE && !winner) {
       setIsAiThinking(true);
 
+      const delay = aiDifficulty === 'HARD' ? 450 : 300;
       aiTimeoutRef.current = setTimeout(() => {
         setIsAiThinking(false);
         const curBoard = boardRef.current;
         if (winnerRef.current) return;
 
-        // Collect available spots near played stones
-        let bestR = 7, bestC = 7;
-        let placed = false;
-
-        // If center is free, take center
+        // If center is free on initial move, take center
         if (curBoard[7][7] === EMPTY) {
           handlePlaceStone(7, 7);
           return;
         }
 
-        // Simple adjacency heuristic
-        for (let r = 0; r < BOARD_SIZE && !placed; r++) {
-          for (let c = 0; c < BOARD_SIZE && !placed; c++) {
+        // Collect all candidates with neighbors
+        const candidates = [];
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          for (let c = 0; c < BOARD_SIZE; c++) {
             if (curBoard[r][c] === EMPTY) {
-              // Check if neighboring cells have stones
               let hasNeighbor = false;
-              for (let dr = -1; dr <= 1; dr++) {
-                for (let dc = -1; dc <= 1; dc++) {
+              for (let dr = -2; dr <= 2; dr++) {
+                for (let dc = -2; dc <= 2; dc++) {
                   const nr = r + dr;
                   const nc = c + dc;
                   if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && curBoard[nr][nc] !== EMPTY) {
@@ -807,24 +814,121 @@ export default function GomokuGame({
                 }
                 if (hasNeighbor) break;
               }
-
               if (hasNeighbor) {
-                bestR = r;
-                bestC = c;
-                placed = true;
+                candidates.push({ r, c });
               }
             }
           }
         }
 
-        handlePlaceStone(bestR, bestC);
-      }, 350);
+        if (candidates.length === 0) {
+          handlePlaceStone(7, 7);
+          return;
+        }
+
+        // Helper to count consecutive stones in a direction
+        const countLine = (grid, r, c, dr, dc, player) => {
+          let count = 0;
+          let nr = r + dr;
+          let nc = c + dc;
+          while (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && grid[nr][nc] === player) {
+            count++;
+            nr += dr;
+            nc += dc;
+          }
+          return count;
+        };
+
+        const evaluateSpot = (grid, r, c, player) => {
+          const DIRS = [[0, 1], [1, 0], [1, 1], [1, -1]];
+          let maxStreak = 0;
+          for (const [dr, dc] of DIRS) {
+            const count = 1 + countLine(grid, r, c, dr, dc, player) + countLine(grid, r, c, -dr, -dc, player);
+            if (count > maxStreak) maxStreak = count;
+          }
+          return maxStreak;
+        };
+
+        // 1. EASY AI: 50% Random candidate, 50% basic streak
+        if (aiDifficulty === 'EASY') {
+          if (Math.random() < 0.5) {
+            const pick = candidates[Math.floor(Math.random() * candidates.length)];
+            handlePlaceStone(pick.r, pick.c);
+            return;
+          }
+        }
+
+        // 2. Scan for instant win (5 in a row for AI White)
+        for (const spot of candidates) {
+          if (evaluateSpot(curBoard, spot.r, spot.c, WHITE) >= 5) {
+            handlePlaceStone(spot.r, spot.c);
+            return;
+          }
+        }
+
+        // 3. Scan for critical block (Opponent Black 4 in a row)
+        for (const spot of candidates) {
+          if (evaluateSpot(curBoard, spot.r, spot.c, BLACK) >= 5) {
+            handlePlaceStone(spot.r, spot.c);
+            return;
+          }
+        }
+
+        // 4. MEDIUM AI: Block 3-in-a-row or build own 3/4
+        if (aiDifficulty === 'MEDIUM') {
+          let bestMove = candidates[0];
+          let bestScore = -1;
+
+          for (const spot of candidates) {
+            const myStreak = evaluateSpot(curBoard, spot.r, spot.c, WHITE);
+            const oppStreak = evaluateSpot(curBoard, spot.r, spot.c, BLACK);
+            const score = (myStreak * 2) + (oppStreak * 1.5) + (Math.random() * 0.5);
+            if (score > bestScore) {
+              bestScore = score;
+              bestMove = spot;
+            }
+          }
+
+          handlePlaceStone(bestMove.r, bestMove.c);
+          return;
+        }
+
+        // 5. HARD AI (Grandmaster Strategic Pattern Heuristic)
+        let bestMove = candidates[0];
+        let highestScore = -Infinity;
+
+        for (const spot of candidates) {
+          const myStreak = evaluateSpot(curBoard, spot.r, spot.c, WHITE);
+          const oppStreak = evaluateSpot(curBoard, spot.r, spot.c, BLACK);
+
+          // Center distance weight
+          const centerDist = Math.abs(spot.r - 7) + Math.abs(spot.c - 7);
+          const centerScore = (14 - centerDist) * 2;
+
+          let score = centerScore;
+          if (myStreak >= 4) score += 5000;
+          else if (myStreak === 3) score += 500;
+          else if (myStreak === 2) score += 50;
+
+          if (oppStreak >= 4) score += 4000;
+          else if (oppStreak === 3) score += 450;
+          else if (oppStreak === 2) score += 40;
+
+          if (score > highestScore) {
+            highestScore = score;
+            bestMove = spot;
+          }
+        }
+
+        handlePlaceStone(bestMove.r, bestMove.c);
+      }, delay);
 
       return () => {
         if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
       };
     }
-  }, [currentPlayer, gameMode, winner]);
+  }, [currentPlayer, gameMode, winner, aiDifficulty]);
+
 
   // Active Turn Countdown Timer with Monotonic Timestamps
   useEffect(() => {

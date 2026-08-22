@@ -47,15 +47,34 @@ export default function LiveEmojiReactionSystem({
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(null);
   const cooldownTimerRef = useRef(null);
+
   const scrollContainerRef = useRef(null);
   const isDraggingRef = useRef(false);
+  const containerRef = useRef(null);
   const highlightedIndexRef = useRef(highlightedIndex);
   highlightedIndexRef.current = highlightedIndex;
 
-  // Window Touch Drag-to-Select Listener for Mobile Gestures
+  // Close popup when clicking outside on Desktop
   useEffect(() => {
-    const handleWindowTouchMove = (e) => {
-      if (!isDraggingRef.current) return;
+    const handleDocumentClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setChatDrawerOpen(false);
+        setHighlightedIndex(null);
+      }
+    };
+
+    if (chatDrawerOpen) {
+      document.addEventListener('mousedown', handleDocumentClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+    };
+  }, [chatDrawerOpen]);
+
+  // Mobile Touch Drag-to-Select Listener
+  useEffect(() => {
+    const onTouchMove = (e) => {
+      if (!isDraggingRef.current || !e.touches || !e.touches[0]) return;
       const touch = e.touches[0];
       const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
       if (targetEl) {
@@ -63,6 +82,9 @@ export default function LiveEmojiReactionSystem({
         if (itemEl) {
           const idx = parseInt(itemEl.getAttribute('data-phrase-index'), 10);
           if (!isNaN(idx)) {
+            if (highlightedIndexRef.current !== idx) {
+              try { soundSynth.playRotate(); } catch (err) {}
+            }
             setHighlightedIndex(idx);
             return;
           }
@@ -71,9 +93,10 @@ export default function LiveEmojiReactionSystem({
       setHighlightedIndex(null);
     };
 
-    const handleWindowTouchEnd = () => {
+    const onTouchEnd = () => {
       if (isDraggingRef.current) {
         isDraggingRef.current = false;
+        setChatDrawerOpen(false);
         const currentIdx = highlightedIndexRef.current;
         if (currentIdx !== null && QUICK_PHRASES[currentIdx]) {
           handleSelectPhrase(QUICK_PHRASES[currentIdx].text);
@@ -82,14 +105,14 @@ export default function LiveEmojiReactionSystem({
       }
     };
 
-    window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
-    window.addEventListener('touchend', handleWindowTouchEnd);
-    window.addEventListener('touchcancel', handleWindowTouchEnd);
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
 
     return () => {
-      window.removeEventListener('touchmove', handleWindowTouchMove);
-      window.removeEventListener('touchend', handleWindowTouchEnd);
-      window.removeEventListener('touchcancel', handleWindowTouchEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
     };
   }, []);
 
@@ -118,8 +141,6 @@ export default function LiveEmojiReactionSystem({
         isSelf: false
       };
 
-
-
       setActiveSpeechBubbles(prev => [...prev.slice(-1), newBubble]);
 
       setTimeout(() => {
@@ -135,7 +156,8 @@ export default function LiveEmojiReactionSystem({
     };
   }, []);
 
-  const startCooldown = (seconds = 3) => {
+  // Unified 5-Second Cooldown for Both Emoji & Chat Actions (Only 1 Action at Once)
+  const startCooldown = (seconds = 5) => {
     setCooldownSeconds(seconds);
     if (cooldownTimerRef.current) clearInterval(cooldownTimerRef.current);
 
@@ -154,9 +176,9 @@ export default function LiveEmojiReactionSystem({
     if (cooldownSeconds > 0) return;
 
     soundSynth.playRotate();
-    startCooldown(3);
+    startCooldown(5);
 
-    // Spawn local reaction ONCE (non-intrusive bottom-right side)
+    // Spawn local reaction ONCE
     spawnReaction(emojiObj.emoji, playerName || 'You', true);
 
     // Broadcast to opponent via Realtime Manager
@@ -183,7 +205,10 @@ export default function LiveEmojiReactionSystem({
   };
 
   const handleSelectPhrase = (phrase) => {
+    if (cooldownSeconds > 0) return;
+
     soundSynth.playBulbLight();
+    startCooldown(5);
     setChatDrawerOpen(false);
 
     const bubbleId = `${Date.now()}_${Math.random()}`;
@@ -212,241 +237,236 @@ export default function LiveEmojiReactionSystem({
     }, 3200);
   };
 
-
   return (
     <div style={{ width: '100%', maxWidth: '440px', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* 1. MEANINGFUL ANCHORED EMOJI REACTIONS (Directly above the game dock near players) */}
-      {activeReactions.map((item) => (
-        <div
-          key={item.id}
-          style={{
-            position: 'absolute',
-            bottom: item.isSelf ? '56px' : 'auto',
-            top: item.isSelf ? 'auto' : '-55px',
-            left: item.isSelf ? '75%' : '25%',
-            transform: 'translateX(-50%)',
-            pointerEvents: 'none',
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            animation: 'fadeIn 0.15s ease-out'
-          }}
-        >
-          {/* Realistic Emoji Action Animation */}
-          <div className={item.animClass} style={{ display: 'inline-flex', fontSize: '38px', lineHeight: 1 }}>
-            {item.emoji}
+      {/* 1. NEATLY ANCHORED EMOJI REACTIONS (Player 1 Left, Player 2 Right) */}
+      {activeReactions.map((item) => {
+        const isLeft = item.isSelf; // Player 1 (You) on Left, Opponent on Right
+
+        return (
+          <div
+            key={item.id}
+            style={{
+              position: 'absolute',
+              bottom: '54px',
+              left: isLeft ? '18%' : '82%',
+              transform: 'translateX(-50%)',
+              pointerEvents: 'none',
+              zIndex: 9999,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '4px',
+              animation: 'speechBubblePop 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+            }}
+          >
+            {/* Realistic Emoji Action Animation */}
+            <div className={item.animClass} style={{ display: 'inline-flex', fontSize: '36px', lineHeight: 1, filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.15))' }}>
+              {item.emoji}
+            </div>
+
+            {/* Static Clean Sender Tag */}
+            <div style={{
+              background: isLeft ? '#2563EB' : '#DC2626',
+              color: '#FFFFFF',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              fontSize: '10px',
+              fontWeight: '800',
+              fontFamily: 'var(--font-mono)',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 3px 10px rgba(0, 0, 0, 0.18)'
+            }}>
+              {item.sender}
+            </div>
           </div>
+        );
+      })}
 
-          {/* Static Clean Sender Tag */}
-          <div style={{
-            background: 'rgba(15, 23, 42, 0.88)',
-            backdropFilter: 'blur(8px)',
-            padding: '2px 8px',
-            borderRadius: '6px',
-            fontSize: '10px',
-            fontWeight: '800',
-            color: item.isSelf ? '#38BDF8' : '#FBBF24',
-            fontFamily: 'var(--font-mono)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            whiteSpace: 'nowrap',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-          }}>
-            {item.sender}
+      {/* 2. NEATLY ANCHORED SPEECH BUBBLES (Player 1 Left, Player 2 Right) */}
+      {activeSpeechBubbles.map((bubble) => {
+        const isLeft = bubble.isSelf;
+
+        return (
+          <div
+            key={bubble.id}
+            className="animate-speech-bubble"
+            style={{
+              position: 'absolute',
+              bottom: '56px',
+              left: isLeft ? '28%' : '72%',
+              transform: 'translateX(-50%)',
+              pointerEvents: 'none',
+              zIndex: 9999,
+              background: '#FFFFFF',
+              border: isLeft ? '1.5px solid #2563EB' : '1.5px solid #DC2626',
+              padding: '7px 12px',
+              borderRadius: '14px',
+              boxShadow: isLeft ? '0 10px 28px -4px rgba(37,99,235,0.22), 0 2px 6px rgba(0,0,0,0.06)' : '0 10px 28px -4px rgba(220,38,38,0.22), 0 2px 6px rgba(0,0,0,0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              whiteSpace: 'nowrap',
+              animation: 'speechBubblePop 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+            }}
+          >
+            <MessageSquare size={13} color={isLeft ? '#2563EB' : '#DC2626'} />
+            <span style={{ fontSize: '12px', fontWeight: '800', color: '#0F172A' }}>
+              {bubble.text}
+            </span>
+            <span style={{
+              fontSize: '9px',
+              fontWeight: '800',
+              fontFamily: 'var(--font-mono)',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              background: isLeft ? '#EFF6FF' : '#FEF2F2',
+              color: isLeft ? '#1D4ED8' : '#B91C1C'
+            }}>
+              {bubble.sender}
+            </span>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
-      {/* 2. MEANINGFUL ANCHORED SPEECH BUBBLES (Directly near player sides) */}
-      {activeSpeechBubbles.map((bubble) => (
-        <div
-          key={bubble.id}
-          className="animate-speech-bubble"
-          style={{
-            position: 'absolute',
-            bottom: bubble.isSelf ? '56px' : 'auto',
-            top: bubble.isSelf ? 'auto' : '-50px',
-            left: bubble.isSelf ? '70%' : '30%',
-            transform: 'translateX(-50%)',
-            pointerEvents: 'none',
-            zIndex: 9999,
-            background: '#FFFFFF',
-            border: '1.5px solid #2563EB',
-            padding: '6px 12px',
-            borderRadius: '12px',
-            boxShadow: '0 8px 24px -4px rgba(37,99,235,0.25), 0 2px 6px rgba(0,0,0,0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <MessageSquare size={13} color="#2563EB" />
-          <span style={{ fontSize: '12px', fontWeight: '800', color: '#18181B' }}>
-            {bubble.text}
-          </span>
-          <span style={{
-            fontSize: '9px',
-            fontWeight: '800',
-            fontFamily: 'var(--font-mono)',
-            padding: '1px 5px',
-            borderRadius: '4px',
-            background: bubble.isSelf ? '#EFF6FF' : '#FEF3C7',
-            color: bubble.isSelf ? '#2563EB' : '#B45309'
-          }}>
-            {bubble.sender}
-          </span>
-        </div>
-      ))}
-
-
-      {/* 3. QUICK CHAT VERTICAL POPUP DRAWER (With Hold & Slide Drag-to-Select Support) */}
-      {chatDrawerOpen && (
-        <div style={{
+      {/* 3. DOCK WITH UPWARD POPUP CHAT MENU */}
+      <div 
+        ref={containerRef}
+        style={{
           width: '100%',
           maxWidth: '440px',
-          background: '#FFFFFF',
-          border: '1.5px solid #CBD5E1',
-          borderRadius: '16px',
-          padding: '12px',
-          boxShadow: '0 16px 36px -4px rgba(15, 23, 42, 0.22), 0 2px 8px rgba(0, 0, 0, 0.06)',
-          marginBottom: '8px',
+          position: 'relative',
           display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          zIndex: 60,
-          animation: 'speechBubblePop 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '4px', borderBottom: '1px solid #F1F5F9' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '11px', fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Quick Tactical Chat
+          alignItems: 'center',
+          background: '#FFFFFF',
+          border: '1.5px solid #E4E4E7',
+          borderRadius: '14px',
+          padding: '4px 6px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.05)',
+          boxSizing: 'border-box',
+          gap: '6px'
+        }}
+      >
+        {/* Upward Floating Tactical Chat Menu (Clean Light Theme with Vivid Hover) */}
+        {chatDrawerOpen && (
+          <div 
+            style={{
+              position: 'absolute',
+              bottom: 'calc(100% + 10px)',
+              left: '0',
+              width: '240px',
+              background: '#FFFFFF',
+              border: '1.5px solid #CBD5E1',
+              borderRadius: '16px',
+              padding: '8px',
+              boxShadow: '0 20px 48px -6px rgba(15, 23, 42, 0.2), 0 4px 14px rgba(0, 0, 0, 0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              zIndex: 99999,
+              pointerEvents: 'auto',
+              animation: 'speechBubblePop 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+            }}
+          >
+            <div style={{ padding: '3px 6px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9' }}>
+              <span style={{ fontSize: '10px', fontWeight: '900', color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                QUICK TACTICAL CHAT
               </span>
-              <span style={{ fontSize: '10px', color: '#64748B', fontWeight: '600' }}>
-                • Tap or Slide
+              <span style={{ fontSize: '9px', fontWeight: '800', color: '#2563EB', background: '#EFF6FF', padding: '1px 6px', borderRadius: '4px' }}>
+                Tap or Slide
               </span>
             </div>
-            <button
-              onClick={() => {
-                soundSynth.playClick();
-                setChatDrawerOpen(false);
-              }}
-              style={{ background: '#F1F5F9', border: 'none', borderRadius: '6px', cursor: 'pointer', padding: '4px', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <X size={13} />
-            </button>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              {QUICK_PHRASES.map((item, idx) => {
+                const isSelected = highlightedIndex === idx;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    data-phrase-index={idx}
+                    onClick={() => handleSelectPhrase(item.text)}
+                    onMouseEnter={() => setHighlightedIndex(idx)}
+                    onMouseLeave={() => setHighlightedIndex(null)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      background: isSelected ? '#EFF6FF' : '#F8FAFC',
+                      border: isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      color: isSelected ? '#1D4ED8' : '#1E293B',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%',
+                      transform: isSelected ? 'scale(1.02) translateX(3px)' : 'scale(1)',
+                      boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.16)' : 'none',
+                      transition: 'all 0.12s ease',
+                      userSelect: 'none'
+                    }}
+                  >
+                    <span style={{ fontSize: '15px', lineHeight: 1 }}>{item.emoji}</span>
+                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.text}</span>
+                    {isSelected && (
+                      <span style={{ fontSize: '9px', fontWeight: '900', color: '#2563EB', background: '#DBEAFE', padding: '1px 5px', borderRadius: '4px', letterSpacing: '0.04em' }}>
+                        SEND ↵
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        )}
 
-          {/* Vertical Message List */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-            maxHeight: '260px',
-            overflowY: 'auto',
-            WebkitOverflowScrolling: 'touch',
-            paddingRight: '2px'
-          }}>
-            {QUICK_PHRASES.map((item, idx) => {
-              const isSelected = highlightedIndex === idx;
 
-              return (
-                <button
-                  key={idx}
-                  data-phrase-index={idx}
-                  onClick={() => handleSelectPhrase(item.text)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '9px 12px',
-                    background: isSelected ? '#EFF6FF' : '#F8FAFC',
-                    border: isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    fontWeight: '800',
-                    color: isSelected ? '#1D4ED8' : '#1E293B',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                    boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.18)' : 'none',
-                    transition: 'all 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
-                    userSelect: 'none',
-                    touchAction: 'manipulation'
-                  }}
-                  onMouseEnter={() => setHighlightedIndex(idx)}
-                  onMouseLeave={() => setHighlightedIndex(null)}
-                >
-                  <span style={{ fontSize: '16px', lineHeight: 1, flexShrink: 0 }}>
-                    {item.emoji}
-                  </span>
-                  <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {item.text}
-                  </span>
-                  {isSelected && (
-                    <span style={{ fontSize: '10px', fontWeight: '900', color: '#2563EB', fontFamily: 'var(--font-mono)' }}>
-                      SEND ↵
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 4. MOBILE-RESPONSIVE DRAG-TO-REACT DOCK (Large Thumb Targets, Horizontal Scroll) */}
-      <div style={{
-        width: '100%',
-        maxWidth: '440px',
-        display: 'flex',
-        alignItems: 'center',
-        background: '#FFFFFF',
-        border: '1.5px solid #E4E4E7',
-        borderRadius: '14px',
-        padding: '4px 6px',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.05)',
-        boxSizing: 'border-box',
-        gap: '6px'
-      }}>
-        {/* Quick Chat Drawer Trigger Button with Hold & Slide Gesture */}
+        {/* Quick Chat Trigger Button */}
         <button
           type="button"
+          disabled={cooldownSeconds > 0}
           onClick={() => {
+            if (cooldownSeconds > 0) return;
             soundSynth.playClick();
             setChatDrawerOpen(prev => !prev);
           }}
-          onTouchStart={() => {
+          onTouchStart={(e) => {
+            if (cooldownSeconds > 0) return;
             isDraggingRef.current = true;
             setChatDrawerOpen(true);
+            setHighlightedIndex(null);
+            try { soundSynth.playClick(); } catch (err) {}
           }}
-          title="Tap or Hold & Drag up to select message"
+          title={cooldownSeconds > 0 ? `Cooldown (${cooldownSeconds}s)` : "Click or Hold to select message"}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            padding: '7px 10px',
+            padding: '7px 11px',
             borderRadius: '10px',
-            background: chatDrawerOpen ? '#EFF6FF' : '#F4F4F5',
-            border: chatDrawerOpen ? '1px solid #BFDBFE' : '1px solid #E4E4E7',
-            color: chatDrawerOpen ? '#2563EB' : '#18181B',
+            background: chatDrawerOpen ? '#2563EB' : (cooldownSeconds > 0 ? '#F4F4F5' : '#F8FAFC'),
+            border: chatDrawerOpen ? '1px solid #1D4ED8' : '1px solid #CBD5E1',
+            color: chatDrawerOpen ? '#FFFFFF' : (cooldownSeconds > 0 ? '#A1A1AA' : '#0F172A'),
             fontSize: '11px',
-            fontWeight: '800',
-            cursor: 'pointer',
+            fontWeight: '900',
+            cursor: cooldownSeconds > 0 ? 'not-allowed' : 'pointer',
             flexShrink: 0,
-            touchAction: 'none'
+            opacity: cooldownSeconds > 0 ? 0.45 : 1,
+            touchAction: 'none',
+            userSelect: 'none',
+            transition: 'all 0.15s ease'
           }}
         >
-          <MessageSquare size={14} color={chatDrawerOpen ? '#2563EB' : '#52525B'} />
+          <MessageSquare size={14} color={chatDrawerOpen ? '#FFFFFF' : (cooldownSeconds > 0 ? '#A1A1AA' : '#2563EB')} />
           <span>CHAT</span>
         </button>
 
         {/* Vertical Divider */}
-        <div style={{ width: '1px', height: '22px', background: '#E4E4E7', flexShrink: 0 }} />
 
+        <div style={{ width: '1px', height: '22px', background: '#E4E4E7', flexShrink: 0 }} />
 
         {/* Drag & React / Swipeable Emoji Rail */}
         <div
@@ -505,7 +525,7 @@ export default function LiveEmojiReactionSystem({
           ))}
         </div>
 
-        {/* Cooldown Timer Pill */}
+        {/* Unified 5-Second Cooldown Timer Pill */}
         {cooldownSeconds > 0 && (
           <div style={{
             display: 'flex',
@@ -529,4 +549,5 @@ export default function LiveEmojiReactionSystem({
     </div>
   );
 }
+
 

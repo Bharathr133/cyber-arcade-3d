@@ -398,19 +398,57 @@ class MatchmakingService {
         match_id: matchId,
         room_id: room.id,
         role: 'O',
+        game_slug: room.game_slug || room.game_key || 'connect4',
+        gameId: room.game_slug || room.game_key || 'connect4',
         opponent: {
           name: opponentName,
           avatarId: opponentAvatar,
           rating: opponentRating
         }
       };
-
-
     } catch (err) {
       console.error('[Join Room Error]:', err);
       return { success: false, error: 'Unable to connect to room. Please check the code and try again.' };
     }
+  }
 
+  // 3b. Dynamic Room Inspector (Detects game type & host in real-time)
+  async getRoomDetails(roomCodeOrId) {
+    const supabase = getSupabase();
+    if (!supabase) return { exists: false, error: 'NO_DATABASE_CLIENT' };
+
+    const cleanToken = String(roomCodeOrId || '').trim().toUpperCase();
+    if (cleanToken.length < 4) return { exists: false };
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanToken);
+
+    try {
+      let query = supabase.from('game_rooms').select('id, room_code, game_slug, game_key, host_id, player_1_name, status, is_private, created_at');
+      if (isUUID) {
+        query = query.eq('id', cleanToken);
+      } else {
+        query = query.eq('room_code', cleanToken);
+      }
+
+      const { data: rooms, error } = await query.limit(1);
+      if (error || !rooms || rooms.length === 0) {
+        return { exists: false, error: 'ROOM_NOT_FOUND' };
+      }
+
+      const r = rooms[0];
+      return {
+        exists: true,
+        roomId: r.id,
+        roomCode: r.room_code,
+        gameSlug: r.game_slug || r.game_key || 'connect4',
+        gameId: r.game_slug || r.game_key || 'connect4',
+        hostName: r.player_1_name || 'Host',
+        status: r.status,
+        isPrivate: r.is_private
+      };
+    } catch (e) {
+      return { exists: false, error: e?.message };
+    }
   }
 
   // 4. Cancel Queue Ticket
@@ -424,9 +462,9 @@ class MatchmakingService {
     } catch (e) {
       return { success: false };
     }
-
   }
 }
+
 
 export const matchmakingService = new MatchmakingService();
 

@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Settings, Clock, Shuffle, User, X, Check, Timer, Bot, 
-  Palette, Eye, LayoutGrid, Dices, ShieldCheck, Globe
+  Palette, Eye, LayoutGrid, Dices, ShieldCheck, Globe, Lock
 } from 'lucide-react';
 import { 
   getPerGameSettings, 
   savePerGameSettings, 
   saveSettingsToAllGames,
+  getUnlockedAiTiers,
   GAME_SPECIFIC_DEFAULTS 
 } from '../utils/gameSettings.js';
+
 
 import { 
   TicTacToeIcon, 
@@ -259,35 +261,77 @@ export default function MatchSettingsModal({
             </div>
           </div>
 
-          {/* 2. AI BOT DIFFICULTY */}
+          {/* 2. AI BOT DIFFICULTY (With Progressive Unlock System) */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', color: '#334155', marginBottom: '6px', fontFamily: 'var(--font-mono)' }}>
-              <Bot size={13} color="#2563EB" />
-              <span>AI BOT DIFFICULTY</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', color: '#334155', fontFamily: 'var(--font-mono)' }}>
+                <Bot size={13} color="#2563EB" />
+                <span>AI BOT DIFFICULTY</span>
+              </div>
+              <span style={{ fontSize: '10px', color: '#64748B', fontWeight: '700' }}>
+                Progression System
+              </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-              {[
-                { key: 'EASY', label: 'Casual (Fun)' },
-                { key: 'MEDIUM', label: 'Smart (Balanced)' },
-                { key: 'HARD', label: 'Pro (Grandmaster)' }
-              ].map(diff => (
-                <button
-                  key={diff.key}
-                  type="button"
-                  onClick={() => updateSetting('aiDifficulty', diff.key)}
-                  style={{
-                    padding: '8px 6px', borderRadius: '8px', fontSize: '11px', fontWeight: '800',
-                    border: gameSettings.aiDifficulty === diff.key ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
-                    background: gameSettings.aiDifficulty === diff.key ? '#EFF6FF' : '#F8FAFC',
-                    color: gameSettings.aiDifficulty === diff.key ? '#2563EB' : '#475569',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {diff.label}
-                </button>
-              ))}
-            </div>
+
+            {(() => {
+              const unlockedTiers = getUnlockedAiTiers(selectedGameTab, profile?.id);
+              const diffOptions = [
+                { key: 'EASY', label: 'Casual (Fun)', unlockReq: 'Unlocked' },
+                { key: 'MEDIUM', label: 'Smart (Balanced)', unlockReq: 'Beat Casual AI' },
+                { key: 'HARD', label: 'Pro (Grandmaster)', unlockReq: 'Beat Smart AI' }
+              ];
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                  {diffOptions.map(diff => {
+                    const isUnlocked = unlockedTiers.includes(diff.key);
+                    const isSelected = gameSettings.aiDifficulty === diff.key;
+
+                    return (
+                      <button
+                        key={diff.key}
+                        type="button"
+                        onClick={() => {
+                          if (!isUnlocked) {
+                            soundSynth.playDefeat();
+                            return;
+                          }
+                          soundSynth.playClick();
+                          updateSetting('aiDifficulty', diff.key);
+                        }}
+                        title={isUnlocked ? `Select ${diff.label}` : `Locked: ${diff.unlockReq} to unlock!`}
+                        style={{
+                          padding: '8px 6px',
+                          borderRadius: '10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '3px',
+                          border: isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                          background: isSelected ? '#EFF6FF' : (isUnlocked ? '#F8FAFC' : '#F1F5F9'),
+                          color: isSelected ? '#2563EB' : (isUnlocked ? '#475569' : '#94A3B8'),
+                          cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                          opacity: isUnlocked ? 1 : 0.65,
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {!isUnlocked && <Lock size={11} color="#94A3B8" />}
+                          <span style={{ fontSize: '11px', fontWeight: '800' }}>
+                            {diff.key}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '9px', fontWeight: '700', color: isSelected ? '#3B82F6' : '#94A3B8' }}>
+                          {isUnlocked ? diff.label.split(' ')[0] : '🔒 Locked'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
+
 
           {/* 3. GAME-SPECIFIC CUSTOMIZATIONS */}
 

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { 
-  Zap, Bot, Users, Lock, ArrowRight, Play, ArrowLeft, ShieldCheck
+  Zap, Bot, Users, Lock, ArrowRight, Play, ArrowLeft, ShieldCheck, Settings
 } from 'lucide-react';
-
 
 import { soundSynth } from '../utils/soundSynth.js';
 import { saveUserProfile, getTier, AVATARS } from '../utils/userProfile.js';
+import { getUnlockedAiTiers, getPerGameSettings, savePerGameSettings } from '../utils/gameSettings.js';
 import { 
   TicTacToeIcon, 
   ConnectFourIcon, 
@@ -13,6 +13,7 @@ import {
   MemoryMatchIcon, 
   LudoIcon 
 } from './GameIcons.jsx';
+
 
 export const GAME_DIRECTORY = {
   connect4: {
@@ -397,6 +398,90 @@ export default function GameModeSelectionHub({
           </div>
         </div>
 
+        {/* 2. AI BOT DIFFICULTY SELECTOR (Only shown when Solo Vs AI Bot mode is selected) */}
+        {chosenMode === 'VS_COMPUTER' && (
+          <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '16px', border: '1.5px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '800', color: '#334155', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>
+                <Bot size={14} color={game.accentColor} />
+                <span>AI BOT DIFFICULTY</span>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '11px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+              >
+                <Settings size={12} />
+                <span>All Settings</span>
+              </button>
+            </div>
+
+            {(() => {
+              const unlockedTiers = getUnlockedAiTiers(game.id, profile?.id);
+              const currentSettings = getPerGameSettings(game.id, profile?.id);
+              const activeDiff = currentSettings.aiDifficulty || 'EASY';
+
+              const diffOptions = [
+                { key: 'EASY', label: 'Casual', sub: 'Fun & Balanced' },
+                { key: 'MEDIUM', label: 'Smart', sub: 'Beat Casual to Unlock' },
+                { key: 'HARD', label: 'Master', sub: 'Beat Smart to Unlock' }
+              ];
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {diffOptions.map(opt => {
+                    const isUnlocked = unlockedTiers.includes(opt.key);
+                    const isSelected = activeDiff === opt.key;
+
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => {
+                          if (!isUnlocked) {
+                            soundSynth.playDefeat();
+                            return;
+                          }
+                          soundSynth.playClick();
+                          savePerGameSettings(game.id, { ...currentSettings, aiDifficulty: opt.key }, profile?.id);
+                          if (onOpenSettings) {
+                            // trigger lightweight sync
+                          }
+                        }}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '12px',
+                          border: isSelected ? `2px solid ${game.accentColor}` : '1.5px solid #E2E8F0',
+                          background: isSelected ? game.bgLight : (isUnlocked ? '#FFFFFF' : '#F1F5F9'),
+                          color: isSelected ? game.accentColor : (isUnlocked ? '#1E293B' : '#94A3B8'),
+                          cursor: isUnlocked ? 'pointer' : 'not-allowed',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '2px',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? `0 2px 8px ${game.accentColor}25` : 'none'
+                        }}
+                        title={isUnlocked ? `Select ${opt.label}` : opt.sub}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {!isUnlocked && <Lock size={11} color="#94A3B8" />}
+                          <span style={{ fontSize: '12px', fontWeight: '900' }}>
+                            {opt.label}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '9px', fontWeight: '700', color: isSelected ? game.accentColor : '#94A3B8' }}>
+                          {isUnlocked ? (isSelected ? '✓ Selected' : 'Unlocked') : '🔒 Locked'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* 2. GUEST PLAYER NAME INPUT (Only if new player) */}
         {isGuestWithoutName && (
           <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '16px', border: '1.5px solid #E2E8F0' }}>
@@ -451,6 +536,7 @@ export default function GameModeSelectionHub({
             <strong style={{ color: game.accentColor }}>Strategy:</strong> {game.tactic}
           </div>
         </div>
+
 
 
         {error && (

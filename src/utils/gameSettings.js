@@ -1,50 +1,107 @@
-// Per-Game Specific Settings & Customization Engine
+// Per-Game Specific Settings & Customization Engine with AI Progression Tiers
 
 export const GAME_SPECIFIC_DEFAULTS = {
   connect4: {
     turnTimeLimit: 30,
     playerBankMinutes: 5,
     firstPlayer: 'random',
-    aiDifficulty: 'HARD',
+    aiDifficulty: 'EASY',
     discTheme: 'CLASSIC'
   },
   tictactoe: {
     turnTimeLimit: 15,
     playerBankMinutes: 3,
     firstPlayer: 'random',
-    aiDifficulty: 'HARD',
+    aiDifficulty: 'EASY',
     symbolStyle: 'NEON'
   },
   gomoku: {
     turnTimeLimit: 30,
     playerBankMinutes: 5,
     firstPlayer: 'p1',
-    aiDifficulty: 'HARD',
+    aiDifficulty: 'EASY',
     boardTheme: 'WOOD'
   },
   memory: {
     turnTimeLimit: 30,
     gridSize: '4x4',
     flipDuration: 1.0,
-    aiDifficulty: 'MEDIUM',
+    aiDifficulty: 'EASY',
     cardTheme: 'ARCADE'
   },
   ludo: {
     turnTimeLimit: 20,
     tokenCount: 4,
     safeSquares: true,
-    aiDifficulty: 'MEDIUM',
+    aiDifficulty: 'EASY',
     animationSpeed: 'FAST'
   }
 };
+
+/**
+ * Get the list of unlocked AI difficulty tiers for a specific game and user.
+ * Tiers: ['EASY'] by default. Unlocks 'MEDIUM' upon beating EASY, and 'HARD' upon beating MEDIUM.
+ */
+export function getUnlockedAiTiers(gameId = 'connect4', userId = null) {
+  try {
+    const key = `arcade_ai_unlocked_${gameId}${userId ? '_' + userId : ''}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (!parsed.includes('EASY')) parsed.unshift('EASY');
+        return parsed;
+      }
+    }
+  } catch (e) {}
+  return ['EASY'];
+}
+
+/**
+ * Record a victory against the AI bot and unlock the next tier if applicable.
+ */
+export function recordAiWinAndUnlock(gameId, currentDifficulty = 'EASY', userId = null) {
+  try {
+    const unlocked = getUnlockedAiTiers(gameId, userId);
+    let newUnlock = null;
+
+    if (currentDifficulty === 'EASY' && !unlocked.includes('MEDIUM')) {
+      unlocked.push('MEDIUM');
+      newUnlock = 'MEDIUM';
+    } else if (currentDifficulty === 'MEDIUM' && !unlocked.includes('HARD')) {
+      unlocked.push('HARD');
+      newUnlock = 'HARD';
+    }
+
+    if (newUnlock) {
+      const key = `arcade_ai_unlocked_${gameId}${userId ? '_' + userId : ''}`;
+      localStorage.setItem(key, JSON.stringify(unlocked));
+
+      // Auto-update game settings to newly unlocked difficulty
+      const currentSettings = getPerGameSettings(gameId, userId);
+      savePerGameSettings(gameId, { ...currentSettings, aiDifficulty: newUnlock }, userId);
+    }
+
+    return { unlockedTiers: unlocked, newUnlock };
+  } catch (e) {
+    return { unlockedTiers: ['EASY'], newUnlock: null };
+  }
+}
 
 export function getPerGameSettings(gameId = 'connect4', userId = null) {
   try {
     const key = `arcade_settings_${gameId}${userId ? '_' + userId : ''}`;
     const raw = localStorage.getItem(key);
     const defaults = GAME_SPECIFIC_DEFAULTS[gameId] || GAME_SPECIFIC_DEFAULTS.connect4;
-    if (!raw) return { ...defaults };
-    return { ...defaults, ...JSON.parse(raw) };
+    const settings = raw ? { ...defaults, ...JSON.parse(raw) } : { ...defaults };
+
+    // Enforce that AI difficulty must be an unlocked tier
+    const unlockedTiers = getUnlockedAiTiers(gameId, userId);
+    if (!unlockedTiers.includes(settings.aiDifficulty)) {
+      settings.aiDifficulty = unlockedTiers[unlockedTiers.length - 1] || 'EASY';
+    }
+
+    return settings;
   } catch (e) {
     return { ...(GAME_SPECIFIC_DEFAULTS[gameId] || GAME_SPECIFIC_DEFAULTS.connect4) };
   }
@@ -85,4 +142,3 @@ export function saveSettingsToAllGames(baseSettings, userId = null) {
   });
   return updatedAll;
 }
-

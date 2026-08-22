@@ -209,13 +209,22 @@ export default function ConnectFour({
   const [connectionStatus, setConnectionStatus] = useState('CONNECTED');
   const [disconnectCountdown, setDisconnectCountdown] = useState(null);
 
-  // Enhancements: AI Difficulty, Hints (Limited to 3 per match), Quick Chat, Series Tracker
-  const [aiDifficulty, setAiDifficulty] = useState('HARD'); // 'EASY' | 'MEDIUM' | 'HARD'
+  // Enhancements: AI Difficulty (Synced with Global & Game Settings), Hints, Quick Chat, Series Tracker
+  const [aiDifficulty, setAiDifficulty] = useState(() => settings?.aiDifficulty || 'EASY'); // 'EASY' | 'MEDIUM' | 'HARD'
+
+  // Synchronize when settings change from Match Settings Modal
+  useEffect(() => {
+    if (settings?.aiDifficulty) {
+      setAiDifficulty(settings.aiDifficulty);
+    }
+  }, [settings?.aiDifficulty]);
+
   const [hintCol, setHintCol] = useState(null);
   const [hintsRemaining, setHintsRemaining] = useState(3);
   const [quickChatOpen, setQuickChatOpen] = useState(false);
   const [activeSpeechBubble, setActiveSpeechBubble] = useState(null); // { text, sender: 'p1' | 'p2' }
   const [seriesTarget] = useState(2); // Best of 3 (first to 2 wins)
+
 
 
   // Result Modal State
