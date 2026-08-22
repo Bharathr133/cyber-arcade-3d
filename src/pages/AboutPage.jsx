@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ArrowLeft, Info, Zap, ShieldCheck, Trophy, 
-  Users, ArrowRight, Heart, Sparkles, Smile, Gamepad2, Volume2
+  Users, ArrowRight, Heart, Smile, Gamepad2, Volume2
 } from 'lucide-react';
 import { soundSynth } from '../utils/soundSynth.js';
 
@@ -35,10 +35,8 @@ export default function AboutPage({ onBackToHome, onExploreGames }) {
             <p className="text-[11px] text-slate-500 font-medium m-0">
               Free Multiplayer Strategy Board Games
             </p>
-
           </div>
         </div>
-
 
         <button
           type="button"
@@ -57,9 +55,10 @@ export default function AboutPage({ onBackToHome, onExploreGames }) {
       <div className="rounded-2xl bg-zinc-900 text-white p-8 sm:p-10 border border-zinc-800 shadow-sm relative overflow-hidden">
         <div className="max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 text-xs font-mono font-bold uppercase tracking-wider mb-3">
-            <Sparkles size={13} className="text-blue-400" />
+            <Info size={13} className="text-blue-400" />
             <span>PLATFORM STORY</span>
           </div>
+
 
           <h2 className="text-2xl sm:text-3xl font-extrabold font-heading tracking-tight leading-tight m-0 text-white">
             Classic Board Games Made Simple, Fast &amp; Free

@@ -468,7 +468,7 @@ function MainApp() {
 
 
 
-  // Listen to browser Back / Forward buttons (popstate) with Active Match Protection
+  // Listen to browser & phone hardware Back / Forward buttons (popstate) with Active Match Protection
   useEffect(() => {
     const handlePopState = () => {
       const isPlayingActiveMatch = Boolean(
@@ -489,11 +489,20 @@ function MainApp() {
         return;
       }
 
+      // Smoothly navigate back to previous screen or home without barrier
       setActiveGameId(route.gameId);
       setActiveGameMode(mode);
-      setIsLeaderboardOpen(route.page === 'leaderboard');
-      setIsSettingsOpen(route.page === 'rules' || route.page === 'settings');
-      setIsProfileOpen(route.page === 'profile');
+      setActivePage(route.page);
+      setIsLeaderboardOpen(false);
+      setIsSettingsOpen(false);
+      setIsProfileOpen(false);
+      setIsRulesModalOpen(false);
+      setIsAboutModalOpen(false);
+      setIsContactModalOpen(false);
+      setIsFairPlayModalOpen(false);
+      setIsPrivacyModalOpen(false);
+      setMatchmakingModal(prev => ({ ...prev, isOpen: false }));
+
       try {
         window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
       } catch (e) {}
@@ -501,6 +510,7 @@ function MainApp() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
 
 
   // Automatically scroll to the very top whenever navigating to any page or game
@@ -845,10 +855,17 @@ function MainApp() {
       } else if (pendingAction.type === 'POPSTATE') {
         setActiveGameId(pendingAction.route.gameId);
         setActiveGameMode(pendingAction.mode);
-        setIsLeaderboardOpen(pendingAction.route.page === 'leaderboard');
-        setIsSettingsOpen(pendingAction.route.page === 'rules' || pendingAction.route.page === 'settings');
-        setIsProfileOpen(pendingAction.route.page === 'profile');
+        setActivePage(pendingAction.route.page);
+        setIsLeaderboardOpen(false);
+        setIsSettingsOpen(false);
+        setIsProfileOpen(false);
+        setIsRulesModalOpen(false);
+        setIsAboutModalOpen(false);
+        setIsContactModalOpen(false);
+        setIsFairPlayModalOpen(false);
+        setIsPrivacyModalOpen(false);
       }
+
       setPendingAction(null);
     } else {
       executeNavigate('home', 'LOBBY');

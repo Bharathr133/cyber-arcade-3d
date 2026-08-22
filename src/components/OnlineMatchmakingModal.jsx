@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   X, Zap, Users, Copy, Check, ShieldCheck, 
   ArrowRight, Radio, RefreshCw, Trophy, Crown, Play, Edit3, User, Bot, Clock, AlertTriangle, Globe,
-  QrCode, Key, CheckCircle, Sparkles
+  QrCode, Key, CheckCircle, Share2
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import ArcadeRollingLoader from './ArcadeRollingLoader.jsx';
@@ -51,6 +51,7 @@ export default function OnlineMatchmakingModal({
   const [joinTokenInput, setJoinTokenInput] = useState('');
   const [detectedRoom, setDetectedRoom] = useState(null);
   const [isDetectingRoom, setIsDetectingRoom] = useState(false);
+  const [isExitPromptOpen, setIsExitPromptOpen] = useState(false);
 
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -93,11 +94,22 @@ export default function OnlineMatchmakingModal({
     });
   };
 
-  const handleCloseAndCancel = () => {
+  const handleRequestClose = () => {
+    // If actively waiting in a private room or searching, ask confirmation
+    if (status === 'WAITING_PRIVATE' || (status === 'SEARCHING' && currentMode === 'QUICK_MATCH')) {
+      soundSynth.playRotate();
+      setIsExitPromptOpen(true);
+    } else {
+      handleConfirmCloseAndCancel();
+    }
+  };
+
+  const handleConfirmCloseAndCancel = () => {
     if (roomData?.id) {
       matchmakingService.cancelMatchmaking(roomData.id, currentUserProfile?.id);
       realtimeManager.leaveRoom(roomData.id);
     }
+    setIsExitPromptOpen(false);
     setStatus('INITIALIZING');
     onClose();
   };
@@ -137,7 +149,7 @@ export default function OnlineMatchmakingModal({
     if (token.length >= 4) {
       setIsDetectingRoom(true);
       const timer = setTimeout(async () => {
-        const details = await matchmakingService.getRoomDetails(token);
+        const details = await matchmakingService.getRoomDetails(token, currentUserProfile?.id);
         setDetectedRoom(details);
         setIsDetectingRoom(false);
       }, 250);
@@ -146,7 +158,7 @@ export default function OnlineMatchmakingModal({
       setDetectedRoom(null);
       setIsDetectingRoom(false);
     }
-  }, [joinTokenInput]);
+  }, [joinTokenInput, currentUserProfile?.id]);
 
   // Reset and auto-start matchmaking on open
   useEffect(() => {
@@ -157,6 +169,7 @@ export default function OnlineMatchmakingModal({
       setMatchLobbyData(null);
       setSearchSecondsLeft(25);
       setDetectedRoom(null);
+      setIsExitPromptOpen(false);
       return;
     }
 
@@ -165,6 +178,7 @@ export default function OnlineMatchmakingModal({
     setPrivateTab(mode === 'JOIN_PRIVATE' ? 'JOIN' : 'CREATE');
     setSearchSecondsLeft(25);
     setCountdown(12);
+    setIsExitPromptOpen(false);
 
     const activeName = currentUserProfile?.display_name || currentUserProfile?.name || currentUserProfile?.username || (currentUserProfile?.email ? currentUserProfile.email.split('@')[0] : '');
     setPlayerName(activeName);
@@ -317,7 +331,12 @@ export default function OnlineMatchmakingModal({
     soundSynth.playClick();
     setPrivateTab('CREATE');
     setCurrentMode('CREATE_PRIVATE');
-    startMatchmakingFlow('CREATE_PRIVATE', playerName, avatarId);
+    if (roomData?.roomCode) {
+      // Room already created in this modal session: persist it!
+      setStatus('WAITING_PRIVATE');
+    } else {
+      startMatchmakingFlow('CREATE_PRIVATE', playerName, avatarId);
+    }
   };
 
   const handleSwitchToJoinPrivate = () => {
@@ -348,6 +367,12 @@ export default function OnlineMatchmakingModal({
     e?.preventDefault();
     const token = joinTokenInput.trim().toUpperCase();
     if (token.length < 4) return;
+
+    if (detectedRoom?.isOwnRoom || (roomData?.roomCode && roomData.roomCode === token)) {
+      setStatus('ERROR');
+      setErrorMessage('You cannot join a room that you created yourself. Please share the code with a friend.');
+      return;
+    }
 
     setStatus('SEARCHING');
     try {
@@ -438,7 +463,7 @@ export default function OnlineMatchmakingModal({
         padding: '16px',
         boxSizing: 'border-box'
       }}
-      onClick={onClose}
+      onClick={handleRequestClose}
     >
       <div
         className="card-enterprise animate-pop-in"
@@ -461,8 +486,9 @@ export default function OnlineMatchmakingModal({
       >
         {/* Close Button */}
         <button
-          onClick={handleCloseAndCancel}
+          onClick={handleRequestClose}
           className="modal-close-btn"
+          title="Close Matchmaking"
           style={{
             position: 'absolute',
             top: '16px',
@@ -687,7 +713,7 @@ export default function OnlineMatchmakingModal({
                 border: '1px solid #a7f3d0',
                 color: '#047857', fontSize: '11px', fontWeight: '800'
               }}>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_#10B981] animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 <span>{availablePlayersCount} {availablePlayersCount === 1 ? 'Player' : 'Players'} Online</span>
               </div>
 
@@ -704,7 +730,7 @@ export default function OnlineMatchmakingModal({
 
             <div>
               <button
-                onClick={handleCloseAndCancel}
+                onClick={handleRequestClose}
                 className="btn-secondary"
                 style={{ padding: '8px 20px', fontSize: '12px', borderRadius: '10px', fontWeight: '800' }}
               >
@@ -875,7 +901,7 @@ export default function OnlineMatchmakingModal({
                       fontWeight: '800', cursor: 'pointer'
                     }}
                   >
-                    {copiedLink ? <Check size={13} /> : <Sparkles size={13} />}
+                    {copiedLink ? <Check size={13} /> : <Share2 size={13} />}
                     <span>{copiedLink ? 'Link Copied!' : 'Copy Direct Link'}</span>
                   </button>
                 </div>
@@ -935,7 +961,7 @@ export default function OnlineMatchmakingModal({
                 placeholder="e.g. A8X9K2"
                 style={{
                   width: '100%', padding: '12px', borderRadius: '12px',
-                  border: detectedRoom?.exists ? '2px solid #10B981' : '2px solid #cbd5e1',
+                  border: detectedRoom?.exists ? (detectedRoom?.isOwnRoom ? '2px solid #F59E0B' : '2px solid #10B981') : '2px solid #cbd5e1',
                   fontSize: '22px', fontWeight: '900', textAlign: 'center', letterSpacing: '5px',
                   fontFamily: 'var(--font-mono)', outline: 'none', background: '#f8fafc',
                   color: '#0F172A', boxSizing: 'border-box'
@@ -953,23 +979,38 @@ export default function OnlineMatchmakingModal({
             )}
 
             {detectedRoom && detectedRoom.exists && (
-              <div style={{
-                background: '#ECFDF5', border: '1.5px solid #A7F3D0', borderRadius: '12px',
-                padding: '10px 12px', marginBottom: '14px', textAlign: 'left'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065F46', fontSize: '12px', fontWeight: '800' }}>
-                  <CheckCircle size={14} color="#10B981" />
-                  <span>Found Room: {GAME_TITLES[detectedRoom.gameSlug] || detectedRoom.gameSlug}</span>
-                </div>
-                <div style={{ fontSize: '11px', color: '#047857', fontWeight: '600', marginTop: '2px' }}>
-                  Hosted by <strong>{detectedRoom.hostName}</strong> • {detectedRoom.status === 'WAITING' ? 'Waiting for opponent' : 'In progress'}
-                </div>
-                {detectedRoom.gameSlug !== gameId && (
-                  <div style={{ fontSize: '10px', color: '#B45309', fontWeight: '800', marginTop: '4px', background: '#FEF3C7', padding: '3px 6px', borderRadius: '6px' }}>
-                    ℹ️ You will be automatically routed to {GAME_TITLES[detectedRoom.gameSlug] || detectedRoom.gameSlug}!
+              detectedRoom.isOwnRoom ? (
+                <div style={{
+                  background: '#FEF3C7', border: '1.5px solid #FCD34D', borderRadius: '12px',
+                  padding: '12px 14px', marginBottom: '14px', textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#92400E', fontSize: '12px', fontWeight: '800' }}>
+                    <AlertTriangle size={15} color="#D97706" />
+                    <span>Cannot Join Own Room</span>
                   </div>
-                )}
-              </div>
+                  <div style={{ fontSize: '11px', color: '#B45309', fontWeight: '600', marginTop: '4px', lineHeight: 1.4 }}>
+                    You cannot join a room that you created yourself. Please share the code with a friend.
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  background: '#ECFDF5', border: '1.5px solid #A7F3D0', borderRadius: '12px',
+                  padding: '10px 12px', marginBottom: '14px', textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#065F46', fontSize: '12px', fontWeight: '800' }}>
+                    <CheckCircle size={14} color="#10B981" />
+                    <span>Found Room: {GAME_TITLES[detectedRoom.gameSlug] || detectedRoom.gameSlug}</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#047857', fontWeight: '600', marginTop: '2px' }}>
+                    Hosted by <strong>{detectedRoom.hostName}</strong> • {detectedRoom.status === 'WAITING' ? 'Waiting for opponent' : 'In progress'}
+                  </div>
+                  {detectedRoom.gameSlug !== gameId && (
+                    <div style={{ fontSize: '10px', color: '#B45309', fontWeight: '800', marginTop: '4px', background: '#FEF3C7', padding: '3px 6px', borderRadius: '6px' }}>
+                      ℹ️ You will be automatically routed to {GAME_TITLES[detectedRoom.gameSlug] || detectedRoom.gameSlug}!
+                    </div>
+                  )}
+                </div>
+              )
             )}
 
             {detectedRoom && !detectedRoom.exists && joinTokenInput.trim().length >= 4 && !isDetectingRoom && (
@@ -980,14 +1021,14 @@ export default function OnlineMatchmakingModal({
 
             <button
               type="submit"
-              disabled={joinTokenInput.trim().length < 4}
+              disabled={joinTokenInput.trim().length < 4 || Boolean(detectedRoom?.isOwnRoom)}
               className="btn-enterprise"
               style={{
                 width: '100%', padding: '13px', borderRadius: '12px',
-                background: joinTokenInput.trim().length >= 4 ? '#2563eb' : '#94a3b8',
+                background: (joinTokenInput.trim().length >= 4 && !detectedRoom?.isOwnRoom) ? '#2563eb' : '#94a3b8',
                 color: '#ffffff', fontSize: '14px', fontWeight: '800', border: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                cursor: joinTokenInput.trim().length >= 4 ? 'pointer' : 'not-allowed'
+                cursor: (joinTokenInput.trim().length >= 4 && !detectedRoom?.isOwnRoom) ? 'pointer' : 'not-allowed'
               }}
             >
               <span>Connect to Match</span>
@@ -1016,6 +1057,70 @@ export default function OnlineMatchmakingModal({
             >
               Close & Try Again
             </button>
+          </div>
+        )}
+
+        {/* 6. Exit Room / Cancel Matchmaking Confirmation Modal */}
+        {isExitPromptOpen && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            borderRadius: '24px',
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            boxSizing: 'border-box'
+          }}>
+            <div className="animate-pop-in" style={{
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              padding: '20px',
+              width: '100%',
+              maxWidth: '340px',
+              textAlign: 'center',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              border: '1px solid #E2E8F0'
+            }}>
+              <div style={{
+                width: '42px', height: '42px', borderRadius: '12px',
+                background: '#FEE2E2', color: '#DC2626',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 12px'
+              }}>
+                <AlertTriangle size={20} />
+              </div>
+              <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '900', color: '#0F172A', fontFamily: 'var(--font-heading)' }}>
+                {status === 'WAITING_PRIVATE' ? 'Leave Private Room?' : 'Cancel Matchmaking?'}
+              </h4>
+              <p style={{ margin: '0 0 16px', fontSize: '12px', color: '#64748B', lineHeight: 1.4, fontWeight: '500' }}>
+                {status === 'WAITING_PRIVATE'
+                  ? 'Your 6-letter room code will be closed and removed from the active queue. Are you sure?'
+                  : 'You will leave the matchmaking pool. Are you sure?'}
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsExitPromptOpen(false)}
+                  className="btn-secondary"
+                  style={{ flex: 1, padding: '9px', fontSize: '12px', fontWeight: '800', borderRadius: '10px' }}
+                >
+                  Stay in Room
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCloseAndCancel}
+                  className="btn-primary"
+                  style={{ flex: 1, padding: '9px', fontSize: '12px', fontWeight: '800', borderRadius: '10px', background: '#DC2626', borderColor: '#DC2626' }}
+                >
+                  Leave Room
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

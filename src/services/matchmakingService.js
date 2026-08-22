@@ -327,6 +327,11 @@ class MatchmakingService {
 
       const room = rooms[0];
 
+      // Prevent player from joining their own room in the same session
+      if (room.host_id && user.userId && room.host_id === user.userId) {
+        return { success: false, error: 'CANNOT_JOIN_OWN_ROOM' };
+      }
+
       // Update room to PLAYING
       await supabase
         .from('game_rooms')
@@ -336,6 +341,7 @@ class MatchmakingService {
           is_waiting: false
         })
         .eq('id', room.id);
+
 
       // Resolve real host name & avatar from profiles if needed
       let opponentName = room.player_1_name;
@@ -413,7 +419,7 @@ class MatchmakingService {
   }
 
   // 3b. Dynamic Room Inspector (Detects game type & host in real-time)
-  async getRoomDetails(roomCodeOrId) {
+  async getRoomDetails(roomCodeOrId, currentUserId = null) {
     const supabase = getSupabase();
     if (!supabase) return { exists: false, error: 'NO_DATABASE_CLIENT' };
 
@@ -436,12 +442,15 @@ class MatchmakingService {
       }
 
       const r = rooms[0];
+      const isOwnRoom = Boolean(currentUserId && r.host_id && r.host_id === currentUserId);
       return {
         exists: true,
         roomId: r.id,
         roomCode: r.room_code,
         gameSlug: r.game_slug || r.game_key || 'connect4',
         gameId: r.game_slug || r.game_key || 'connect4',
+        hostId: r.host_id,
+        isOwnRoom,
         hostName: r.player_1_name || 'Host',
         status: r.status,
         isPrivate: r.is_private
@@ -450,6 +459,7 @@ class MatchmakingService {
       return { exists: false, error: e?.message };
     }
   }
+
 
   // 4. Cancel Queue Ticket
   async cancelMatchmaking(roomId, userId = null) {

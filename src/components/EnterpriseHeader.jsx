@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, Volume2, VolumeX, Zap, Menu, User, 
-  Trophy, Settings, ChevronRight, Sparkles, Shield
+  Trophy, Settings, ChevronRight, Info, Shield
 } from 'lucide-react';
 
 import { presenceService } from '../services/presenceService.js';
@@ -21,7 +21,7 @@ export const PAGE_TITLES = {
   leaderboard: { title: 'Top 50 Leaderboard', icon: Trophy },
   rules: { title: 'How to Play & Rules', icon: Settings },
   howtoplay: { title: 'How to Play & Rules', icon: Settings },
-  about: { title: 'About games4u', icon: Sparkles },
+  about: { title: 'About games4u', icon: Info },
   contact: { title: 'Contact & Feedback', icon: User },
   feedback: { title: 'Contact & Feedback', icon: User },
   fairplay: { title: 'Fair Play & ELO', icon: Shield },
@@ -52,7 +52,6 @@ export default function EnterpriseHeader({
   const [onlineCount, setOnlineCount] = useState(() => presenceService.getOnlineCount());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
 
   // Subscribe to live online presence
   useEffect(() => {
@@ -60,25 +59,30 @@ export default function EnterpriseHeader({
     return () => unsub();
   }, []);
 
-  // Dynamic Scroll Elevation & Reading Progress Listener
+  // Lightweight throttled scroll listener (avoids frame drops / lag on scroll)
   useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
-      setIsScrolled(currentScrollY > 10);
+    let ticking = false;
+    let lastScrolled = false;
 
-      const winHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
-      if (winHeight > 0) {
-        const progress = Math.min(100, Math.max(0, (currentScrollY / winHeight) * 100));
-        setScrollProgress(progress);
-      } else {
-        setScrollProgress(0);
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+          const scrolled = currentScrollY > 10;
+          if (scrolled !== lastScrolled) {
+            lastScrolled = scrolled;
+            setIsScrolled(scrolled);
+          }
+          ticking = false;
+        });
+        ticking = true;
       }
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
 
   const isInsideGame = activeGameId && activeGameId !== 'home';
   const currentGame = isInsideGame ? GAME_DETAILS[activeGameId] : null;
@@ -117,24 +121,8 @@ export default function EnterpriseHeader({
           transition: 'left 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, box-shadow 0.2s ease'
         }}
       >
-        {/* Scroll Depth Progress Accent Line (Visible on scroll) */}
-
-        {scrollProgress > 1 && !isInsideGame && (
-          <div 
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              height: '2px',
-              width: `${scrollProgress}%`,
-              background: 'linear-gradient(90deg, #2563EB, #60A5FA)',
-              transition: 'width 0.1s linear',
-              pointerEvents: 'none'
-            }} 
-          />
-        )}
-
         {/* LEFT ZONE: Brand & Navigation Breadcrumb */}
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
             {/* Mobile Hamburger Menu Trigger (Only when outside active game) */}
@@ -193,17 +181,20 @@ export default function EnterpriseHeader({
             {/* Dynamic Context Breadcrumb on Game or Subpages */}
             {isInsideGame && currentGame && (
               <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium pl-2 border-l border-zinc-300">
-                <ChevronRight size={13} className="text-zinc-400" />
-                <span className="font-bold text-zinc-800 truncate max-w-[180px]">
+                <ChevronRight size={13} className="text-zinc-400 flex-shrink-0" />
+                <span className="font-bold text-zinc-800 truncate max-w-[130px] sm:max-w-[200px]">
                   {currentGame.title}
+                </span>
+                <span className="hidden sm:inline-block text-[10px] text-zinc-500 font-mono font-medium px-1.5 py-0.5 rounded bg-zinc-200/60 ml-1">
+                  {currentGame.subtitle}
                 </span>
               </div>
             )}
 
             {currentPage && !isInsideGame && (
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-zinc-400 font-medium pl-2 border-l border-zinc-300">
-                <ChevronRight size={13} className="text-zinc-400" />
-                <span className="font-bold text-zinc-800 truncate max-w-[180px]">
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium pl-2 border-l border-zinc-300">
+                <ChevronRight size={13} className="text-zinc-400 flex-shrink-0" />
+                <span className="font-bold text-zinc-800 truncate max-w-[140px] sm:max-w-[220px]">
                   {currentPage.title}
                 </span>
               </div>
@@ -211,32 +202,6 @@ export default function EnterpriseHeader({
           </div>
         </div>
 
-
-        {/* CENTER ZONE: In-Game Match Header Badge */}
-        {isInsideGame && currentGame && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <span style={{
-              fontFamily: 'var(--font-heading)',
-              fontSize: 'clamp(12px, 2.5vw, 14px)',
-              fontWeight: '800',
-              color: '#18181B',
-              whiteSpace: 'nowrap'
-            }}>
-              {currentGame.title}
-            </span>
-            <span className="hidden sm:inline" style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '10px',
-              color: '#71717A',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              background: '#FFFFFF',
-              border: '1px solid #E4E4E7'
-            }}>
-              {currentGame.subtitle}
-            </span>
-          </div>
-        )}
 
         {/* RIGHT ZONE: Utility, Audio & Mini Player Rank Pill */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>

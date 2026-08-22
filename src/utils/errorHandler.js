@@ -58,7 +58,18 @@ export function formatErrorMessage(error, fallbackContext = 'Operation') {
   }
 
   // 2. Room & Matchmaking Errors
+  if (raw.includes('CANNOT_JOIN_OWN_ROOM') || raw.includes('own room')) {
+    return {
+      title: 'Cannot Join Own Room',
+      message: 'You cannot join a room that you created yourself. Please share the code with a friend.',
+      code: 'CANNOT_JOIN_OWN_ROOM',
+      type: 'warning'
+    };
+  }
+
+
   if (raw.includes('ROOM_NOT_FOUND') || raw.includes('Room not found') || raw.includes('PGRST116')) {
+
     return {
       title: 'Room Not Found',
       message: 'The 6-letter room code could not be found or has expired. Please check the code with your friend.',

@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { 
-  Bot, User, Zap, Lock, Play, Layers, Dices, Users, Swords, Trophy, 
-  ArrowRight, ShieldCheck, Flame, Compass, ChevronDown, ChevronUp, Clock, Award, Globe, Radio, KeyRound,
-  Brain, Sparkles, Lightbulb, CheckCircle2, Heart, Smile, PlayCircle
+  Bot, User, Zap, Lock, Play, Dices, Users, Trophy, 
+  ArrowRight, ShieldCheck, Flame, Compass, ChevronDown, ChevronUp, Clock, Award, Globe, Radio,
+  Brain, CheckCircle2
 } from 'lucide-react';
-
 
 import { TicTacToeIcon, ConnectFourIcon, GomokuIcon, MemoryMatchIcon, LudoIcon } from './GameIcons.jsx';
 import { presenceService } from '../services/presenceService.js';
 import { getTier } from '../utils/userProfile.js';
 
-// Clean Vector Board Previews
-function TicTacToeTilePreview() {
+// Memoized Clean Vector Board Previews (Render once and cached)
+const TicTacToeTilePreview = memo(function TicTacToeTilePreview() {
   return (
     <div className="w-full h-[130px] bg-slate-50/80 rounded-xl border border-slate-200/80 flex items-center justify-center relative overflow-hidden group-hover:border-blue-300 transition-colors">
       <svg viewBox="0 0 120 120" className="w-full h-full max-w-[110px]">
@@ -35,9 +34,9 @@ function TicTacToeTilePreview() {
       </svg>
     </div>
   );
-}
+});
 
-function ConnectFourTilePreview() {
+const ConnectFourTilePreview = memo(function ConnectFourTilePreview() {
   return (
     <div className="w-full h-[130px] bg-slate-50/80 rounded-xl border border-slate-200/80 flex items-center justify-center relative overflow-hidden group-hover:border-blue-300 transition-colors">
       <svg viewBox="0 0 140 120" className="w-full h-full max-w-[120px]">
@@ -66,9 +65,9 @@ function ConnectFourTilePreview() {
       </svg>
     </div>
   );
-}
+});
 
-function GomokuTilePreview() {
+const GomokuTilePreview = memo(function GomokuTilePreview() {
   return (
     <div className="w-full h-[130px] bg-slate-50/80 rounded-xl border border-slate-200/80 flex items-center justify-center relative overflow-hidden group-hover:border-blue-300 transition-colors">
       <svg viewBox="0 0 120 120" className="w-full h-full max-w-[110px]">
@@ -92,9 +91,9 @@ function GomokuTilePreview() {
       </svg>
     </div>
   );
-}
+});
 
-function MemoryMatchTilePreview() {
+const MemoryMatchTilePreview = memo(function MemoryMatchTilePreview() {
   return (
     <div className="w-full h-[130px] bg-slate-50/80 rounded-xl border border-slate-200/80 flex items-center justify-center relative overflow-hidden group-hover:border-blue-300 transition-colors">
       <svg viewBox="0 0 140 120" className="w-full h-full max-w-[120px]">
@@ -118,9 +117,9 @@ function MemoryMatchTilePreview() {
       </svg>
     </div>
   );
-}
+});
 
-function LudoTilePreview() {
+const LudoTilePreview = memo(function LudoTilePreview() {
   return (
     <div className="w-full h-[130px] bg-slate-50/80 rounded-xl border border-slate-200/80 flex items-center justify-center relative overflow-hidden group-hover:border-blue-300 transition-colors">
       <svg viewBox="0 0 120 120" className="w-full h-full max-w-[110px]">
@@ -143,9 +142,82 @@ function LudoTilePreview() {
       </svg>
     </div>
   );
-}
+});
 
-export default function ArcadeHomeScreen({
+const STATIC_GAMES = [
+  {
+    id: 'connect4',
+    title: 'Connect 4',
+    subtitle: '7 × 6 Gravity Grid',
+    specBadge: '7×6 GRID',
+    difficulty: 'Medium',
+    duration: '3–5 min',
+    strategyTag: 'Vertical Traps',
+    type: 'GRID',
+    icon: ConnectFourIcon,
+    accentColor: '#3B82F6',
+    preview: <ConnectFourTilePreview />,
+    tip: 'Control the center column (Col 4) early to maximize horizontal, vertical, and diagonal winning combinations.'
+  },
+  {
+    id: 'tictactoe',
+    title: 'Tic-Tac-Toe',
+    subtitle: '3 × 3 Fast Arena',
+    specBadge: '3×3 FAST',
+    difficulty: 'Fast',
+    duration: '1–2 min',
+    strategyTag: 'Corner Forks',
+    type: 'GRID',
+    icon: TicTacToeIcon,
+    accentColor: '#6366F1',
+    preview: <TicTacToeTilePreview />,
+    tip: 'Opening with corners gives you multiple diagonal and cross-vector trap possibilities against aggressive opponents.'
+  },
+  {
+    id: 'gomoku',
+    title: 'Gomoku',
+    subtitle: '15 × 15 Pro Tournament Grid',
+    specBadge: '15×15 PRO',
+    difficulty: 'High Strategy',
+    duration: '5–10 min',
+    strategyTag: 'Open-Four Chains',
+    type: 'GRID',
+    icon: GomokuIcon,
+    accentColor: '#0F172A',
+    preview: <GomokuTilePreview />,
+    tip: 'Create an unblocked three-in-a-row (Open Three) to force your opponent into defense while setting up double-attack branches.'
+  },
+  {
+    id: 'memory',
+    title: 'Memory Match',
+    subtitle: '5-Level Campaign & Blitz',
+    specBadge: '5 LEVELS',
+    difficulty: 'Cognitive',
+    duration: '2–4 min',
+    strategyTag: 'Visual Recall',
+    type: 'CAMPAIGN',
+    icon: MemoryMatchIcon,
+    accentColor: '#10B981',
+    preview: <MemoryMatchTilePreview />,
+    tip: 'Memorize tiles in corner clusters first to eliminate grid quadrants and achieve high multiplier score streaks.'
+  },
+  {
+    id: 'ludo',
+    title: 'Ludo Championship',
+    subtitle: '2–4 Player Battle Arena',
+    specBadge: '2–4 PLAYERS',
+    difficulty: 'Strategy & Luck',
+    duration: '8–15 min',
+    strategyTag: 'Safe Zone Tactics',
+    type: 'LUDO',
+    icon: LudoIcon,
+    accentColor: '#F59E0B',
+    preview: <LudoTilePreview />,
+    tip: 'Keep tokens stationed on star/safe zones until an opponent passes, then strike from behind for maximum board control.'
+  }
+];
+
+function ArcadeHomeScreen({
   profile,
   stats,
   onSelectGame,
@@ -159,7 +231,6 @@ export default function ArcadeHomeScreen({
 }) {
   const [gameCounts, setGameCounts] = useState(() => presenceService.getGameCounts());
   const [totalOnline, setTotalOnline] = useState(() => presenceService.getOnlineCount());
-  const [roomCodeInput, setRoomCodeInput] = useState('');
   const [expandedTip, setExpandedTip] = useState(null);
 
   useEffect(() => {
@@ -172,93 +243,6 @@ export default function ArcadeHomeScreen({
     };
   }, []);
 
-  const handleJoinCodeSubmit = (e) => {
-    e.preventDefault();
-    const clean = roomCodeInput.trim().toUpperCase();
-    if (clean.length >= 4) {
-      onJoinPrivateRoom('connect4', clean);
-      setRoomCodeInput('');
-    }
-  };
-
-  const GAMES = [
-    {
-      id: 'connect4',
-      title: 'Connect 4',
-      subtitle: '7 × 6 Gravity Grid',
-      specBadge: '7×6 GRID',
-      difficulty: 'Medium',
-      duration: '3–5 min',
-      strategyTag: 'Vertical Traps',
-      type: 'GRID',
-      icon: ConnectFourIcon,
-      accentColor: '#3B82F6',
-      preview: <ConnectFourTilePreview />,
-      tip: 'Control the center column (Col 4) early to maximize horizontal, vertical, and diagonal winning combinations.'
-    },
-    {
-      id: 'tictactoe',
-      title: 'Tic-Tac-Toe',
-      subtitle: '3 × 3 Fast Arena',
-      specBadge: '3×3 FAST',
-      difficulty: 'Fast',
-      duration: '1–2 min',
-      strategyTag: 'Corner Forks',
-      type: 'GRID',
-      icon: TicTacToeIcon,
-      accentColor: '#6366F1',
-      preview: <TicTacToeTilePreview />,
-      tip: 'Opening with corners gives you multiple diagonal and cross-vector trap possibilities against aggressive opponents.'
-    },
-    {
-      id: 'gomoku',
-      title: 'Gomoku',
-      subtitle: '15 × 15 Pro Tournament Grid',
-      specBadge: '15×15 PRO',
-      difficulty: 'High Strategy',
-      duration: '5–10 min',
-      strategyTag: 'Open-Four Chains',
-      type: 'GRID',
-      icon: GomokuIcon,
-      accentColor: '#0F172A',
-      preview: <GomokuTilePreview />,
-      tip: 'Create an unblocked three-in-a-row (Open Three) to force your opponent into defense while setting up double-attack branches.'
-    },
-    {
-      id: 'memory',
-      title: 'Memory Match',
-      subtitle: '5-Level Campaign & Blitz',
-      specBadge: '5 LEVELS',
-      difficulty: 'Cognitive',
-      duration: '2–4 min',
-      strategyTag: 'Visual Recall',
-      type: 'CAMPAIGN',
-      icon: MemoryMatchIcon,
-      accentColor: '#10B981',
-      preview: <MemoryMatchTilePreview />,
-      tip: 'Memorize tiles in corner clusters first to eliminate grid quadrants and achieve high multiplier score streaks.'
-    },
-    {
-      id: 'ludo',
-      title: 'Ludo Championship',
-      subtitle: '2–4 Player Battle Arena',
-      specBadge: '2–4 PLAYERS',
-      difficulty: 'Strategy & Luck',
-      duration: '8–15 min',
-      strategyTag: 'Safe Zone Tactics',
-      type: 'LUDO',
-      icon: LudoIcon,
-      accentColor: '#F59E0B',
-      preview: <LudoTilePreview />,
-      tip: 'Keep tokens stationed on star/safe zones until an opponent passes, then strike from behind for maximum board control.'
-    }
-  ];
-
-  const totalMatches = (profile?.wins || 0) + (profile?.losses || 0) + (profile?.draws || 0);
-  const tier = getTier(profile?.rating || 1200, totalMatches);
-  const winRate = totalMatches > 0 ? Math.round(((profile?.wins || 0) / totalMatches) * 100) : 0;
-  const xpProgress = Math.min(100, Math.round(((profile?.xp || 0) % 100)));
-
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 pb-8 box-border">
       {/* ARENA GAME CARDS GRID */}
@@ -266,15 +250,13 @@ export default function ArcadeHomeScreen({
         <div className="flex items-center justify-between mb-3 px-1">
           <div className="flex items-center gap-2">
             <Compass size={16} className="text-blue-600" />
-
             <h2 className="text-sm font-extrabold text-slate-900 font-heading uppercase tracking-wider m-0">Arena Game Disciplines</h2>
           </div>
           <span className="text-xs text-slate-500 font-mono font-bold">Select a game to battle</span>
         </div>
 
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {GAMES.map((game) => {
+          {STATIC_GAMES.map((game) => {
             const IconComp = game.icon;
             const liveCount = gameCounts[game.id] || 0;
             const isTipOpen = expandedTip === game.id;
@@ -306,7 +288,7 @@ export default function ArcadeHomeScreen({
                   {/* Real-time Dynamic Player Count Badge from DB */}
                   <div className="flex flex-col items-end gap-1">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black font-mono tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                       <span>{liveCount > 0 ? `${liveCount} LIVE` : 'ACTIVE'}</span>
                     </span>
                   </div>
@@ -398,7 +380,6 @@ export default function ArcadeHomeScreen({
                       <Dices size={13} />
                       <span>2–4P Pass & Play</span>
                     </button>
-
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 gap-1.5 pt-1">
@@ -514,7 +495,7 @@ export default function ArcadeHomeScreen({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-purple-50 border border-purple-200 text-purple-700 text-[10px] font-mono font-black uppercase tracking-wider mb-1">
-              <Sparkles size={12} />
+              <Award size={12} />
               <span>Platform Advantage</span>
             </div>
             <h2 className="text-lg font-black text-slate-900 font-heading m-0 tracking-tight">
@@ -616,10 +597,8 @@ export default function ArcadeHomeScreen({
           </div>
         </div>
       </div>
-
-
-
     </div>
   );
 }
 
+export default memo(ArcadeHomeScreen);

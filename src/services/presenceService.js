@@ -163,16 +163,25 @@ class PresenceService {
   }
 
   notifyListeners() {
-    this.listeners.forEach(fn => {
-      try { fn(this.onlineCount); } catch (e) {}
+    if (this._notifyTimeout) return;
+    this._notifyTimeout = requestAnimationFrame(() => {
+      this._notifyTimeout = null;
+      this.listeners.forEach(fn => {
+        try { fn(this.onlineCount); } catch (e) {}
+      });
     });
   }
 
   notifyGameListeners() {
-    this.gameListeners.forEach(fn => {
-      try { fn(this.gameCounts); } catch (e) {}
+    if (this._notifyGameTimeout) return;
+    this._notifyGameTimeout = requestAnimationFrame(() => {
+      this._notifyGameTimeout = null;
+      this.gameListeners.forEach(fn => {
+        try { fn(this.gameCounts); } catch (e) {}
+      });
     });
   }
+
 
   getOnlineCount() {
     return this.onlineCount;
