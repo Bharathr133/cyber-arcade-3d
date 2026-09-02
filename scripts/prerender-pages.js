@@ -227,10 +227,16 @@ ROUTES.forEach(({ slug, key }) => {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  // Write static index.html for this route
+  // Write static directory index.html for this route (e.g., /connect4/index.html)
   const targetFile = path.join(targetDir, 'index.html');
   fs.writeFileSync(targetFile, html, 'utf-8');
-  console.log(`✓ Generated SEO prerender for: /${slug} -> ${targetFile}`);
+
+  // Also write flat html file (e.g., /connect4.html) for cleanUrls matching
+  const flatFile = path.join(distDir, `${slug}.html`);
+  fs.writeFileSync(flatFile, html, 'utf-8');
+
+  console.log(`✓ Generated SEO prerender for: /${slug} -> ${targetFile} & ${flatFile}`);
 });
 
 console.log('🎉 All 11 route pages prerendered successfully with self-referencing canonical tags!');
+
