@@ -47,6 +47,8 @@ import LudoGame from './games/LudoGame.jsx';
 import { soundSynth } from './utils/soundSynth.js';
 import { getUserProfile, recordMatchResult, logoutUserProfile } from './utils/userProfile.js';
 import { authService } from './services/authService.js';
+import { updateSEO } from './utils/seo.js';
+
 
 
 import { 
@@ -513,8 +515,12 @@ function MainApp() {
 
 
 
-  // Automatically scroll to the very top whenever navigating to any page or game
+  // Automatically scroll to the very top and synchronize SEO metadata whenever navigating
   useEffect(() => {
+    try {
+      updateSEO({ gameId: activeGameId, page: activePage });
+    } catch (e) {}
+
     try {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
       document.documentElement.scrollTop = 0;
@@ -525,6 +531,7 @@ function MainApp() {
       window.scrollTo(0, 0);
     }
   }, [activePage, activeGameId, activeGameMode]);
+
 
   // Protect accidental page refresh / exit during active online matches
   useEffect(() => {
